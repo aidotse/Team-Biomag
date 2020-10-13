@@ -7,9 +7,9 @@ import random
 import numpy as np
 import tensorflow as tf
 from tensorflow.keras.utils import Sequence
-from tensorflow.keras.layers import Input
+from tensorflow.keras.layers import Input, Conv2D
 from tensorflow.keras.models import Model
-from tensorflow.keras.layers import Conv2D
+from tensorflow.keras.losses import MeanSquaredError, BinaryCrossentropy
 import imageio
 from skimage import transform
 import matplotlib.pyplot as plt
@@ -31,8 +31,8 @@ class AZSequence(Sequence):
     @staticmethod
     def get_random_crop(image_shape, crop_shape):
         randmax = image_shape-np.array(list(crop_shape))
-        topright = np.array([random.randrange(r) for r in randmax])
-        return tuple(slice(s, e) for (s, e) in zip(topright, topright+crop_shape))
+        topleft = np.array([random.randrange(r) for r in randmax])
+        return tuple(slice(s, e) for (s, e) in zip(topleft, topleft+crop_shape))
 
 
     @staticmethod
@@ -40,6 +40,9 @@ class AZSequence(Sequence):
         # The same x-y crop will be applied to each brightflield slice and even on the fluo targets.
         for idx, im_path in enumerate(slice_paths):
             slice_ = imageio.imread(im_path).astype(np.float32)
+
+            if normalize:
+                slice_ = slice_/np.max(slice_)
 
             if np.shape(slice_) != config.target_size:
                 # Resize
@@ -56,10 +59,7 @@ class AZSequence(Sequence):
                 xy_shape =  (len(slice_paths),) + np.shape(slice_)
                 image = np.zeros(xy_shape, slice_.dtype)
             
-            if normalize:
-                image[idx] = (slice_/np.max(slice_))
-            else:
-                image[idx] = slice_
+            image[idx] = slice_
         return image
 
 
@@ -122,6 +122,11 @@ def get_dataset(data_dir):
     Image format:   AssayPlate_Greiner_#655090_D04_T0001F006L01A04Z03C04.tif - Only the Z varies
     Label format:   AssayPlate_Greiner_#655090_D04_T0001F006L01A01Z01C01.tif - A and C varies between C01 and C03, Z= 01
     
+    Fluo channels:
+    C01=nuclei  (Red)
+    C02=lipids  (Green)
+    C03=cyto    (Blue)
+
     D04: well
     T0001: timepoint (irrelevant)
     F006: FOV (site)
@@ -179,12 +184,45 @@ def get_network():
     model = Model(unet_input, fluo_channels)
     model.summary(line_length=130)
 
-    model.compile(optimizer='sgd', loss=tf.keras.losses.MeanSquaredError())
+    '''
+
+    Weighed loss:
+
+    Network input: (b, h, w, 3)
+    b images are in the batch, each of them has hxw pixels and 3 channels
+
+    The default MeanSquaredError will reduce the mean over the whole batch.
+
+    '''
+    def channelwise_loss(y_true, y_pred):
+        
+        total_loss = 0.
+        for ch in [1, 2]:
+            total_loss += MeanSquaredError()(y_true[..., ch], y_pred[..., ch])
+        
+        # The first channel is the nuclei
+        # Most of the pixels below the intensity 600 are the part of the background and correlates with the cyto.
+        # Therefore we concentrate on the >600 ground truth pixels. (600 ~ .1 after normalization)
+        nuclei_weight = .8
+        nuclei_thresh = .1
+        
+        nuclei_weight_tensor = nuclei_weight*tf.cast(y_true[..., 0] > nuclei_thresh, tf.float32) + (1.-tf.cast(y_true[..., 0] <= nuclei_thresh, tf.float32))
+        
+        nuclei_loss = BinaryCrossentropy(reduction=tf.keras.losses.Reduction.NONE)(
+            y_true[..., 0], 
+            y_pred[..., 0]
+        )
+        
+        total_loss += tf.math.reduce_mean(nuclei_loss * nuclei_weight_tensor)
+
+        return total_loss
+
+    model.compile(optimizer='sgd', loss=channelwise_loss)
     return model
 
 
 def train(sequence, model):
-    model.fit(sequence, epochs=10)
+    model.fit(sequence, epochs=200)
     if config.save_checkpoint is not None:
         model.save_weights(config.save_checkpoint)
 
@@ -194,45 +232,60 @@ If the model is set, it predicts the image using the model passed and shows the 
 '''
 def test(sequence, model=None, save=False):
     for idx, (x, y) in enumerate(sequence):
-            batch_element = 0
-            plot_layout = 120
+        batch_element = 0
+        plot_layout = 120
 
-            x_sample, y_sample = x[batch_element], y[batch_element]
-            
-            z_pos = np.shape(x_sample)[-1]//2
-            x_im, y_im = x_sample[..., z_pos], y_sample
+        x_sample, y_sample = x[batch_element], y[batch_element]
+        
+        z_pos = np.shape(x_sample)[-1]//2
+        x_im, y_im = x_sample[..., z_pos], y_sample
 
-            if model is not None:
-                plot_layout = 220
-                y_pred = model.predict(x)
-                y_pred_sample = y_pred[batch_element]
+        if model is not None:
+            plot_layout = 220
+            y_pred = model.predict(x)
+            y_pred_sample = y_pred[batch_element]
 
-                plt.subplot(plot_layout + 3, title='Predicted fluorescent')
-                plt.imshow(y_pred_sample)
+            y_pred_sample_normalized = np.zeros_like(y_pred_sample)
+            for ch in range(np.shape(y_pred_sample)[-1]):
+                y_pred_sample_normalized[..., ch] = y_pred_sample[..., ch] / np.max(y_pred_sample[..., ch])
 
-            plt.subplot(plot_layout + 1, title='Brightfield@Z=%d' % z_pos)
-            plt.imshow(x_im)
+            plt.subplot(plot_layout + 3, title='Predicted fluorescent')
+            plt.imshow(y_pred_sample)
 
-            plt.subplot(plot_layout + 2, title='Fluorescent (merged)')
-            plt.imshow(y_im)
-
-            plt.show()
+            plt.subplot(plot_layout + 4, title='Predicted fluorescent (ch normalized)')
+            plt.imshow(y_pred_sample_normalized)
 
             if save:
-                bright = (x_sample[..., 1]*255).astype(np.uint8)
-                fluo = (y_sample*255).astype(np.uint8)
-                
-                imageio.imwrite('%d_bright.tif' % idx, bright)
-                imageio.imwrite('%d_fluo.tif' % idx, fluo)
+                imageio.imwrite(os.path.join(config.output_dir, '%d_pred.tif' % idx), y_pred_sample)
 
-    model.load_weights('model.h5')
+        plt.subplot(plot_layout + 1, title='Brightfield@Z=%d' % z_pos)
+        plt.imshow(x_im)
+
+        plt.subplot(plot_layout + 2, title='Fluorescent (merged)')
+        plt.imshow(y_im)
+
+        plt.show()
+
+        if save:
+            bright = (x_sample[..., 1]*255).astype(np.uint8)
+            fluo = (y_sample*255).astype(np.uint8)
+            
+            imageio.imwrite(os.path.join(config.output_dir, '%d_bright.tif' % idx, bright))
+            imageio.imwrite(os.path.join(config.output_dir, '%d_fluo.tif' % idx, fluo))
+
+
+
+    model.load_weights(config.save_checkpoint)
 
 if __name__ == '__main__':
+    os.makedirs(config.output_dir, exist_ok=True)
+
     sequence = get_dataset(config.data_dir)
 
     model = get_network()
     model = train(sequence, model)
-    #model.load_weights(config.save_checkpoint)
+    if config.save_checkpoint is not None:
+        model.load_weights(config.save_checkpoint)
     
     # A (tranied) model can be passed to see the results.
     test(sequence, model)
