@@ -172,14 +172,14 @@ def get_network():
         nuclei_weight = .8
         nuclei_thresh = .1
         
-        nuclei_weight = nuclei_weight*tf.cast(y_true[..., 0] > nuclei_thresh, tf.float32) + (1.-tf.cast(y_true[..., 0] <= nuclei_thresh, tf.float32))
+        nuclei_weight_tensor = nuclei_weight*tf.cast(y_true[..., 0] > nuclei_thresh, tf.float32) + (1.-tf.cast(y_true[..., 0] <= nuclei_thresh, tf.float32))
         
         nuclei_loss = BinaryCrossentropy(reduction=tf.keras.losses.Reduction.NONE)(
             y_true[..., 0], 
             y_pred[..., 0]
         )
         
-        total_loss += tf.math.reduce_mean(nuclei_weight * nuclei_loss)
+        total_loss += tf.math.reduce_mean(nuclei_loss * nuclei_weight_tensor)
 
         return total_loss
 
