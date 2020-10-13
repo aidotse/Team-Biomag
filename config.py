@@ -7,3 +7,5 @@ net_input_shape = (256, 256, 7)
 
 save_checkpoint = 'model.h5'
 #save_checkpoint = None
+
+output_dir = 'output'
