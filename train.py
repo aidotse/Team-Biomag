@@ -62,6 +62,19 @@ class AZSequence(Sequence):
                 image[idx] = slice_
         return image
 
+
+    @staticmethod
+    def augment(image, rotate_tf: bool, fliplr_tf: bool, flipud_tf: bool) -> np.ndarray:
+        if rotate_tf:
+            angle = np.random.choice([90,180,270])
+            image = transform.rotate(image, angle=angle)
+        if fliplr_tf:
+            image = np.fliplr(image)
+        if flipud_tf:
+            image = np.flipud(image)
+        return image
+
+
     def __getitem__(self, idx):
         image_idx = idx // self.sample_per_image
         batch_x = self.x[image_idx * self.batch_size:(image_idx + 1) *
@@ -76,17 +89,25 @@ class AZSequence(Sequence):
 
         random_subsample = AZSequence.get_random_crop(config.target_size, config.sample_crop[:2])
 
+        rotate_tf = np.random.uniform() < config.rotate_p
+        fliplr_tf = np.random.uniform() < config.fliplr_p
+        flipud_tf = np.random.uniform() < config.flipud_p
+
         for batch_elem in batch_x:
             image = self.read_stack(batch_elem, True, random_subsample)
             image = np.transpose(image, (1, 2, 0))
+            if config.augment:
+                image = self.augment(image, rotate_tf, fliplr_tf, flipud_tf)
             batch_x_images.append(image)
-            #print('Batch X shape:', np.shape(image))
+            # print('Batch X shape:', np.shape(image))
 
         for batch_elem in batch_y:
             image = self.read_stack(batch_elem, True, random_subsample)
             image = np.transpose(image, (1, 2, 0))
+            if config.augment:
+                image = self.augment(image, rotate_tf, fliplr_tf, flipud_tf)
             batch_y_images.append(image)
-            #print('Batch y shape:', np.shape(image))
+            # print('Batch y shape:', np.shape(image))
 
         return np.array(batch_x_images), np.array(batch_y_images)
 
@@ -137,6 +158,19 @@ def get_dataset(data_dir):
 
     return AZSequence(x, y, batch_size=1, sample_per_image=20)
 
+
+def visualize(original, augmented):
+    fig = plt.figure()
+    plt.subplot(1,2,1)
+    plt.title('Original image')
+    plt.imshow(original)
+
+    plt.subplot(1,2,2)
+    plt.title('Augmented image')
+    plt.imshow(augmented)
+    plt.show()
+
+
 def get_network():
     unet_input = Input(shape=config.net_input_shape)
     unet_out = sd.unet_block(n_filter_base=64)(unet_input)
@@ -147,6 +181,7 @@ def get_network():
 
     model.compile(optimizer='sgd', loss=tf.keras.losses.MeanSquaredError())
     return model
+
 
 def train(sequence, model):
     model.fit(sequence, epochs=10)

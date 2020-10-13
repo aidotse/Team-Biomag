@@ -7,3 +7,9 @@ net_input_shape = (256, 256, 7)
 
 save_checkpoint = 'model.h5'
 #save_checkpoint = None
+
+# augmentation on/off and probabilities
+augment = False
+rotate_p = 0.5
+fliplr_p = 0.5
+flipud_p = 0.5
