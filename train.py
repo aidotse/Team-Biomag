@@ -20,12 +20,12 @@ import stardist_blocks as sd
 
 class AZSequence(Sequence):
 
-    def __init__(self, X, y, batch_size, sample_per_image=1, train=True):
+    def __init__(self, X, y, batch_size, sample_per_image=1, train_=True):
         random.seed(42)
         self.x, self.y = X, y
         self.batch_size = batch_size
         self.sample_per_image = sample_per_image
-        self.train = train
+        self.train = train_
 
     def __len__(self):
         return math.ceil(len(self.x)*self.sample_per_image / self.batch_size)
@@ -38,7 +38,7 @@ class AZSequence(Sequence):
 
 
     @staticmethod
-    def read_stack(slice_paths, train, normalize=False, random_subsample=False):
+    def read_stack(slice_paths, train_, normalize=False, random_subsample=False):
         # The same x-y crop will be applied to each brightflield slice and even on the fluo targets.
         for idx, im_path in enumerate(slice_paths):
             slice_ = imageio.imread(im_path).astype(np.float32)
@@ -54,10 +54,14 @@ class AZSequence(Sequence):
                 global_crop = tuple(slice(None, s) for s in config.target_size)
                 slice_ = slice_[global_crop]
 
-            if train:
+            if train_:
                 slice_ = slice_[:config.splity, :]
             else:
                 slice_ = slice_[config.splity:, :]
+            
+            plt.imshow(slice_)
+            plt.show()
+            
             #print(np.shape(slice_))
             #import sys
             #sys.exit(-1)
@@ -67,7 +71,7 @@ class AZSequence(Sequence):
             if idx == 0:
                 xy_shape =  (len(slice_paths),) + np.shape(slice_)
                 image = np.zeros(xy_shape, slice_.dtype)
-            
+
             image[idx] = slice_
         return image
 
@@ -90,20 +94,20 @@ class AZSequence(Sequence):
             random_subsample = AZSequence.get_random_crop((2154-config.splity, 2554), config.sample_crop[:2])
 
         for batch_elem in batch_x:
-            image = self.read_stack(batch_elem, train, True, random_subsample)
+            image = self.read_stack(batch_elem, self.train, True, random_subsample)
             image = np.transpose(image, (1, 2, 0))
             batch_x_images.append(image)
             #print('Batch X shape:', np.shape(image))
 
         for batch_elem in batch_y:
-            image = self.read_stack(batch_elem, train, True, random_subsample)
+            image = self.read_stack(batch_elem, self.train, True, random_subsample)
             image = np.transpose(image, (1, 2, 0))
             batch_y_images.append(image)
             #print('Batch y shape:', np.shape(image))
 
         return np.array(batch_x_images), np.array(batch_y_images)
 
-def get_dataset(data_dir, train, sample_per_image=60):
+def get_dataset(data_dir, train_, sample_per_image=60):
     image_paths = glob('%s/*/input/*' % data_dir)
     label_paths = glob('%s/*/targets/*' % data_dir)
 
@@ -153,7 +157,7 @@ def get_dataset(data_dir, train, sample_per_image=60):
         x.append(images[k])
         y.append(labels[k])
 
-    return AZSequence(x, y, batch_size=1, sample_per_image=sample_per_image, train=train)
+    return AZSequence(x, y, batch_size=1, sample_per_image=sample_per_image, train_=train_)
 
 def get_network():
     unet_input = Input(shape=config.net_input_shape)
@@ -284,8 +288,8 @@ def test(sequence, model=None, save=False):
 if __name__ == '__main__':
     os.makedirs(config.output_dir, exist_ok=True)
 
-    train_sequence = get_dataset(config.data_dir, train=True, sample_per_image=20)
-    val_sequence = get_dataset(config.data_dir, train=False, sample_per_image=2)
+    val_sequence = get_dataset(config.data_dir, train_=False, sample_per_image=2)
+    train_sequence = get_dataset(config.data_dir, train_=True, sample_per_image=20)
 
     model = get_network()
     '''
