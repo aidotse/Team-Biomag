@@ -20,10 +20,12 @@ import stardist_blocks as sd
 
 class AZSequence(Sequence):
 
-    def __init__(self, X, y, batch_size, sample_per_image=1):
+    def __init__(self, X, y, batch_size, sample_per_image=1, train=True):
+        random.seed(42)
         self.x, self.y = X, y
         self.batch_size = batch_size
         self.sample_per_image = sample_per_image
+        self.train = train
 
     def __len__(self):
         return math.ceil(len(self.x)*self.sample_per_image / self.batch_size)
@@ -36,7 +38,7 @@ class AZSequence(Sequence):
 
 
     @staticmethod
-    def read_stack(slice_paths, normalize=False, random_subsample=False):
+    def read_stack(slice_paths, train, normalize=False, random_subsample=False):
         # The same x-y crop will be applied to each brightflield slice and even on the fluo targets.
         for idx, im_path in enumerate(slice_paths):
             slice_ = imageio.imread(im_path).astype(np.float32)
@@ -52,6 +54,13 @@ class AZSequence(Sequence):
                 global_crop = tuple(slice(None, s) for s in config.target_size)
                 slice_ = slice_[global_crop]
 
+            if train:
+                slice_ = slice_[:config.splity, :]
+            else:
+                slice_ = slice_[config.splity:, :]
+            #print(np.shape(slice_))
+            #import sys
+            #sys.exit(-1)
             if random_subsample is not None:
                 slice_ = slice_[random_subsample]
 
@@ -74,23 +83,27 @@ class AZSequence(Sequence):
         batch_x_images = []
         batch_y_images = []
 
-        random_subsample = AZSequence.get_random_crop(config.target_size, config.sample_crop[:2])
+        #random_subsample = AZSequence.get_random_crop(config.target_size, config.sample_crop[:2])
+        if self.train:
+            random_subsample = AZSequence.get_random_crop((config.splity, 2554), config.sample_crop[:2])
+        else:
+            random_subsample = AZSequence.get_random_crop((2154-config.splity, 2554), config.sample_crop[:2])
 
         for batch_elem in batch_x:
-            image = self.read_stack(batch_elem, True, random_subsample)
+            image = self.read_stack(batch_elem, train, True, random_subsample)
             image = np.transpose(image, (1, 2, 0))
             batch_x_images.append(image)
             #print('Batch X shape:', np.shape(image))
 
         for batch_elem in batch_y:
-            image = self.read_stack(batch_elem, True, random_subsample)
+            image = self.read_stack(batch_elem, train, True, random_subsample)
             image = np.transpose(image, (1, 2, 0))
             batch_y_images.append(image)
             #print('Batch y shape:', np.shape(image))
 
         return np.array(batch_x_images), np.array(batch_y_images)
 
-def get_dataset(data_dir):
+def get_dataset(data_dir, train, sample_per_image=60):
     image_paths = glob('%s/*/input/*' % data_dir)
     label_paths = glob('%s/*/targets/*' % data_dir)
 
@@ -140,12 +153,12 @@ def get_dataset(data_dir):
         x.append(images[k])
         y.append(labels[k])
 
-    return AZSequence(x, y, batch_size=1, sample_per_image=20)
+    return AZSequence(x, y, batch_size=1, sample_per_image=sample_per_image, train=train)
 
 def get_network():
     unet_input = Input(shape=config.net_input_shape)
     unet_out = sd.unet_block(n_filter_base=64)(unet_input)
-    fluo_channels = Conv2D(3, (1, 1), name='fluo_channels')(unet_out)
+    fluo_channels = Conv2D(3, (1, 1), name='fluo_channels', activation='sigmoid')(unet_out)
     
     model = Model(unet_input, fluo_channels)
     model.summary(line_length=130)
@@ -163,31 +176,45 @@ def get_network():
     def channelwise_loss(y_true, y_pred):
         
         total_loss = 0.
-        for ch in [1, 2]:
-            total_loss += MeanSquaredError()(y_true[..., ch], y_pred[..., ch])
         
+        weights = [.5, .2, .3]
+
+        for ch in [0, 1, 2]:
+            #total_loss += MeanSquaredError()(y_true[..., ch], y_pred[..., ch])
+            total_loss += weights[ch] * BinaryCrossentropy(reduction=tf.keras.losses.Reduction.NONE)(
+                        y_true[..., ch], 
+                        y_pred[..., ch]
+                    )
+
+
         # The first channel is the nuclei
         # Most of the pixels below the intensity 600 are the part of the background and correlates with the cyto.
         # Therefore we concentrate on the >600 ground truth pixels. (600 ~ .1 after normalization)
-        nuclei_weight = .8
-        nuclei_thresh = .1
+        #nuclei_weight = .8
+        #nuclei_thresh = .1
         
-        nuclei_weight_tensor = nuclei_weight*tf.cast(y_true[..., 0] > nuclei_thresh, tf.float32) + (1.-tf.cast(y_true[..., 0] <= nuclei_thresh, tf.float32))
+        #nuclei_weight_tensor = nuclei_weight*tf.cast(y_true[..., 0] > nuclei_thresh, tf.float32) + (1.-tf.cast(y_true[..., 0] <= nuclei_thresh, tf.float32))
         
+        '''
         nuclei_loss = BinaryCrossentropy(reduction=tf.keras.losses.Reduction.NONE)(
             y_true[..., 0], 
             y_pred[..., 0]
         )
+        '''
         
-        total_loss += tf.math.reduce_mean(nuclei_loss * nuclei_weight_tensor)
+        #total_loss += tf.math.reduce_mean(nuclei_loss * nuclei_weight_tensor)
+        #total_loss += tf.math.reduce_mean(nuclei_loss)
 
         return total_loss
 
-    model.compile(optimizer='sgd', loss=channelwise_loss)
+    model.compile(optimizer='adam', loss=channelwise_loss)
     return model
 
-def train(sequence, model):
-    model.fit(sequence, epochs=200)
+def train(sequences, model):
+    train, val = sequences
+    mcp_save = tf.keras.callbacks.ModelCheckpoint('model-{epoch:03d}.h5', save_best_only=True, monitor='val_loss', mode='min')
+    callbacks = [mcp_save]
+    model.fit(train, validation_data=val, epochs=1000, callbacks=callbacks)
     if config.save_checkpoint is not None:
         model.save_weights(config.save_checkpoint)
 
@@ -206,7 +233,7 @@ def test(sequence, model=None, save=False):
         x_im, y_im = x_sample[..., z_pos], y_sample
 
         if model is not None:
-            plot_layout = 220
+            plot_layout = 240
             y_pred = model.predict(x)
             y_pred_sample = y_pred[batch_element]
 
@@ -214,20 +241,29 @@ def test(sequence, model=None, save=False):
             for ch in range(np.shape(y_pred_sample)[-1]):
                 y_pred_sample_normalized[..., ch] = y_pred_sample[..., ch] / np.max(y_pred_sample[..., ch])
 
-            plt.subplot(plot_layout + 3, title='Predicted fluorescent')
-            plt.imshow(y_pred_sample)
+            plt.subplot(plot_layout + 6, title='Predicted fluorescent (red)')
+            plt.imshow(y_pred_sample[..., 0])
 
-            plt.subplot(plot_layout + 4, title='Predicted fluorescent (ch normalized)')
-            plt.imshow(y_pred_sample_normalized)
+            plt.subplot(plot_layout + 7, title='Predicted Fluorescent (green)')
+            plt.imshow(y_pred_sample[..., 1])
+
+            plt.subplot(plot_layout + 8, title='Predicted Fluorescent (blue)')
+            plt.imshow(y_pred_sample[..., 2])
 
             if save:
                 imageio.imwrite(os.path.join(config.output_dir, '%d_pred.tif' % idx), y_pred_sample)
 
-        plt.subplot(plot_layout + 1, title='Brightfield@Z=%d' % z_pos)
+        plt.subplot(plot_layout + 1, title='Input Brightfield@Z=%d' % z_pos)
         plt.imshow(x_im)
 
-        plt.subplot(plot_layout + 2, title='Fluorescent (merged)')
-        plt.imshow(y_im)
+        plt.subplot(plot_layout + 2, title='GT Fluorescent (red)')
+        plt.imshow(y_im[..., 0])
+
+        plt.subplot(plot_layout + 3, title='GT Fluorescent (green)')
+        plt.imshow(y_im[..., 1])
+        
+        plt.subplot(plot_layout + 4, title='GT Fluorescent (blue)')
+        plt.imshow(y_im[..., 2])
 
         plt.show()
 
@@ -239,18 +275,25 @@ def test(sequence, model=None, save=False):
             imageio.imwrite(os.path.join(config.output_dir, '%d_fluo.tif' % idx, fluo))
 
 
+        imageio.volwrite('output/pred-%d.tif' % idx, y_pred_sample)
+        imageio.volwrite('output/true-%d.tif' % idx, y_im)
+        imageio.volwrite('output/input-%d.tif' % idx, np.transpose(x_sample, (2, 0, 1)))
 
     model.load_weights(config.save_checkpoint)
 
 if __name__ == '__main__':
     os.makedirs(config.output_dir, exist_ok=True)
 
-    sequence = get_dataset(config.data_dir)
+    train_sequence = get_dataset(config.data_dir, train=True, sample_per_image=20)
+    val_sequence = get_dataset(config.data_dir, train=False, sample_per_image=2)
 
     model = get_network()
-    model = train(sequence, model)
+    '''
     if config.save_checkpoint is not None:
-        model.load_weights(config.save_checkpoint)
-    
+        model.load_weights('model.h5')
+    '''
+
+    model = train((train_sequence, val_sequence), model)
+
     # A (tranied) model can be passed to see the results.
-    test(sequence, model)
+    test(train_sequence, model)
