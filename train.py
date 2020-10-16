@@ -59,12 +59,6 @@ class AZSequence(Sequence):
             else:
                 slice_ = slice_[config.splity:, :]
             
-            plt.imshow(slice_)
-            plt.show()
-            
-            #print(np.shape(slice_))
-            #import sys
-            #sys.exit(-1)
             if random_subsample is not None:
                 slice_ = slice_[random_subsample]
 
@@ -85,6 +79,7 @@ class AZSequence(Sequence):
             image = np.fliplr(image)
         if flipud_tf:
             image = np.flipud(image)
+        
         return image
 
 
@@ -100,7 +95,6 @@ class AZSequence(Sequence):
         batch_x_images = []
         batch_y_images = []
 
-        #random_subsample = AZSequence.get_random_crop(config.target_size, config.sample_crop[:2])
         if self.train:
             random_subsample = AZSequence.get_random_crop((config.splity, 2554), config.sample_crop[:2])
         else:
@@ -113,7 +107,7 @@ class AZSequence(Sequence):
         for batch_elem in batch_x:
             image = self.read_stack(batch_elem, self.train, True, random_subsample)
             image = np.transpose(image, (1, 2, 0))
-            if config.augment:
+            if config.augment and self.train:
                 image = self.augment(image, rotate_tf, fliplr_tf, flipud_tf)
             batch_x_images.append(image)
             # print('Batch X shape:', np.shape(image))
@@ -121,7 +115,7 @@ class AZSequence(Sequence):
         for batch_elem in batch_y:
             image = self.read_stack(batch_elem, self.train, True, random_subsample)
             image = np.transpose(image, (1, 2, 0))
-            if config.augment:
+            if config.augment and self.train:
                 image = self.augment(image, rotate_tf, fliplr_tf, flipud_tf)
             batch_y_images.append(image)
             # print('Batch y shape:', np.shape(image))
