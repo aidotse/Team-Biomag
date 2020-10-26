@@ -71,15 +71,21 @@ class AZSequence(Sequence):
 
 
     @staticmethod
-    def augment(image, rotate_tf: bool, fliplr_tf: bool, flipud_tf: bool) -> np.ndarray:
-        if rotate_tf:
-            angle = np.random.choice([90,180,270])
-            image = transform.rotate(image, angle=angle)
+    def augment(image, rotate_angle: int, fliplr_tf: bool, flipud_tf: bool) -> np.ndarray:
+        # AZSequence.count += 1
+        # print(f"{AZSequence.count} - rotate={rotate_angle}, flip LR={fliplr_tf}, flip UD={flipud_tf}")
+        if rotate_angle != 0:
+            image = transform.rotate(image, angle=rotate_angle)
         if fliplr_tf:
             image = np.fliplr(image)
         if flipud_tf:
             image = np.flipud(image)
-        
+
+        # if image_in.shape[-1] > 3:
+        #     visualize(image_in[..., 3], image[..., 3])
+        # else:
+        #     visualize(image_in, image)
+
         return image
 
 
@@ -101,6 +107,10 @@ class AZSequence(Sequence):
             random_subsample = AZSequence.get_random_crop((2154-config.splity, 2554), config.sample_crop[:2])
 
         rotate_tf = np.random.uniform() < config.rotate_p
+        if rotate_tf:
+            rotate_angle = random.choice([90, 180, 270])
+        else:
+            rotate_angle = 0
         fliplr_tf = np.random.uniform() < config.fliplr_p
         flipud_tf = np.random.uniform() < config.flipud_p
 
@@ -108,7 +118,7 @@ class AZSequence(Sequence):
             image = self.read_stack(batch_elem, self.train, True, random_subsample)
             image = np.transpose(image, (1, 2, 0))
             if config.augment and self.train:
-                image = self.augment(image, rotate_tf, fliplr_tf, flipud_tf)
+                image = self.augment(image, rotate_angle, fliplr_tf, flipud_tf)
             batch_x_images.append(image)
             # print('Batch X shape:', np.shape(image))
 
@@ -116,7 +126,7 @@ class AZSequence(Sequence):
             image = self.read_stack(batch_elem, self.train, True, random_subsample)
             image = np.transpose(image, (1, 2, 0))
             if config.augment and self.train:
-                image = self.augment(image, rotate_tf, fliplr_tf, flipud_tf)
+                image = self.augment(image, rotate_angle, fliplr_tf, flipud_tf)
             batch_y_images.append(image)
             # print('Batch y shape:', np.shape(image))
 
