@@ -8,7 +8,7 @@ data_dir = None
 # We sample the patches from y<1641 to the train and y>=1641 to the val.
 splity = 1641
 
-# Crop the top-left part of this sizem from the input to have equal size inputs.
+# If not none, crop the top-left part to uniform.
 target_size = (2154, 2554)
 
 # The input will be sampled with this size.
