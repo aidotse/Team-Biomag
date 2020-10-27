@@ -244,11 +244,13 @@ def get_network():
 
 def train(sequences, model):
     train, val = sequences
-    mcp_save = tf.keras.callbacks.ModelCheckpoint('model-{epoch:03d}.h5', save_best_only=True, monitor='val_loss', mode='min')
-    callbacks = [mcp_save]
+    mcp_save = tf.keras.callbacks.ModelCheckpoint('%s/model-{epoch:04d}-{val_loss:.2f}.h5' % config.output_dir, save_best_only=True, monitor='val_loss', mode='min')
+    callbacks = []
+    
+    if not config.readonly:
+        callbacks += [mcp_save]
+
     model.fit(train, validation_data=val, epochs=1000, callbacks=callbacks)
-    if config.save_checkpoint is not None:
-        model.save_weights(config.save_checkpoint)
 
     return model
 '''
@@ -298,6 +300,7 @@ def test(sequence, model=None, save=False):
         plt.imshow(y_im[..., 2])
 
         plt.show()
+        #plt.savefig('%d.png' % idx)
 
         if save:
             bright = (x_sample[..., 1]*255).astype(np.uint8)
@@ -307,25 +310,23 @@ def test(sequence, model=None, save=False):
             imageio.imwrite(os.path.join(config.output_dir, '%d_fluo.tif' % idx, fluo))
 
 
-        imageio.volwrite('output/pred-%d.tif' % idx, y_pred_sample)
-        imageio.volwrite('output/true-%d.tif' % idx, y_im)
-        imageio.volwrite('output/input-%d.tif' % idx, np.transpose(x_sample, (2, 0, 1)))
-
-    model.load_weights(config.save_checkpoint)
+            imageio.volwrite('%s/pred-%d.tif' % (config.output_dir, idx), y_pred_sample)
+            imageio.volwrite('%s/true-%d.tif' % (config.output_dir, idx), y_im)
+            imageio.volwrite('%s/input-%d.tif' % (config.output_dir, idx), np.transpose(x_sample, (2, 0, 1)))
 
 if __name__ == '__main__':
     os.makedirs(config.output_dir, exist_ok=True)
 
     val_sequence = get_dataset(config.data_dir, train_=False, sample_per_image=2)
-    train_sequence = get_dataset(config.data_dir, train_=True, sample_per_image=20)
 
     model = get_network()
-    '''
-    if config.save_checkpoint is not None:
-        model.load_weights('model.h5')
-    '''
 
-    model = train((train_sequence, val_sequence), model)
+    if config.init_weights is not None:
+        print('Loading weights:', config.init_weights)
+        model.load_weights(config.init_weights)
 
-    # A (tranied) model can be passed to see the results.
-    test(train_sequence, model)
+    if config.train == True:
+        train_sequence = get_dataset(config.data_dir, train_=True, sample_per_image=20)
+        model = train((train_sequence, val_sequence), model)
+
+    test(val_sequence, model)

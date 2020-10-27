@@ -1,6 +1,9 @@
 .idea
 .venv
+.vscode
+
 __pycache__
+
 init.py
-model.h5
+
 output
