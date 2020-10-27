@@ -52,5 +52,14 @@ $ git commit -a -m "message"
 $ git push
 ```
 
+## Docker
+Build the image
+```
+docker build --tag biomag:adipocyte .
+```
 
+Run training:
+```
+./docker_run.sh /path/to/data
+```
 
