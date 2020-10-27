@@ -18,6 +18,7 @@ import config
 import init
 import stardist_blocks as sd
 
+
 class AZSequence(Sequence):
 
     def __init__(self, X, y, batch_size, sample_per_image=1, train_=True):
@@ -35,7 +36,6 @@ class AZSequence(Sequence):
         randmax = image_shape-np.array(list(crop_shape))
         topleft = np.array([random.randrange(r) for r in randmax])
         return tuple(slice(s, e) for (s, e) in zip(topleft, topleft+crop_shape))
-
 
     @staticmethod
     def read_stack(slice_paths, train_, normalize=False, random_subsample=False):
@@ -69,19 +69,23 @@ class AZSequence(Sequence):
             image[idx] = slice_
         return image
 
-
     @staticmethod
-    def augment(image, rotate_tf: bool, fliplr_tf: bool, flipud_tf: bool) -> np.ndarray:
-        if rotate_tf:
-            angle = np.random.choice([90,180,270])
-            image = transform.rotate(image, angle=angle)
+    def augment(image, rotate_angle: int, fliplr_tf: bool, flipud_tf: bool) -> np.ndarray:
+        # AZSequence.count += 1
+        # print(f"{AZSequence.count} - rotate={rotate_angle}, flip LR={fliplr_tf}, flip UD={flipud_tf}")
+        if rotate_angle != 0:
+            image = transform.rotate(image, angle=rotate_angle)
         if fliplr_tf:
             image = np.fliplr(image)
         if flipud_tf:
             image = np.flipud(image)
-        
-        return image
 
+        # if image_in.shape[-1] > 3:
+        #     visualize(image_in[..., 3], image[..., 3])
+        # else:
+        #     visualize(image_in, image)
+
+        return image
 
     def __getitem__(self, idx):
         image_idx = idx // self.sample_per_image
@@ -101,6 +105,10 @@ class AZSequence(Sequence):
             random_subsample = AZSequence.get_random_crop((2154-config.splity, 2554), config.sample_crop[:2])
 
         rotate_tf = np.random.uniform() < config.rotate_p
+        if rotate_tf:
+            rotate_angle = random.choice([90, 180, 270])
+        else:
+            rotate_angle = 0
         fliplr_tf = np.random.uniform() < config.fliplr_p
         flipud_tf = np.random.uniform() < config.flipud_p
 
@@ -108,7 +116,7 @@ class AZSequence(Sequence):
             image = self.read_stack(batch_elem, self.train, True, random_subsample)
             image = np.transpose(image, (1, 2, 0))
             if config.augment and self.train:
-                image = self.augment(image, rotate_tf, fliplr_tf, flipud_tf)
+                image = self.augment(image, rotate_angle, fliplr_tf, flipud_tf)
             batch_x_images.append(image)
             # print('Batch X shape:', np.shape(image))
 
@@ -116,11 +124,12 @@ class AZSequence(Sequence):
             image = self.read_stack(batch_elem, self.train, True, random_subsample)
             image = np.transpose(image, (1, 2, 0))
             if config.augment and self.train:
-                image = self.augment(image, rotate_tf, fliplr_tf, flipud_tf)
+                image = self.augment(image, rotate_angle, fliplr_tf, flipud_tf)
             batch_y_images.append(image)
             # print('Batch y shape:', np.shape(image))
 
         return np.array(batch_x_images), np.array(batch_y_images)
+
 
 def get_dataset(data_dir, train_, sample_per_image=60):
     image_paths = glob('%s/*/input/*' % data_dir)
@@ -242,6 +251,7 @@ def get_network():
     model.compile(optimizer='adam', loss=channelwise_loss)
     return model
 
+
 def train(sequences, model):
     train, val = sequences
     mcp_save = tf.keras.callbacks.ModelCheckpoint('%s/model-{epoch:04d}-{val_loss:.2f}.h5' % config.output_dir, save_best_only=True, monitor='val_loss', mode='min')
@@ -253,10 +263,12 @@ def train(sequences, model):
     model.fit(train, validation_data=val, epochs=1000, callbacks=callbacks)
 
     return model
-'''
-If the model is set, it predicts the image using the model passed and shows the result.
-'''
+
+
 def test(sequence, model=None, save=False):
+    """
+    If the model is set, it predicts the image using the model passed and shows the result.
+    """
     for idx, (x, y) in enumerate(sequence):
         batch_element = 0
         plot_layout = 120
@@ -313,6 +325,7 @@ def test(sequence, model=None, save=False):
             imageio.volwrite('%s/pred-%d.tif' % (config.output_dir, idx), y_pred_sample)
             imageio.volwrite('%s/true-%d.tif' % (config.output_dir, idx), y_im)
             imageio.volwrite('%s/input-%d.tif' % (config.output_dir, idx), np.transpose(x_sample, (2, 0, 1)))
+
 
 if __name__ == '__main__':
     os.makedirs(config.output_dir, exist_ok=True)
