@@ -4,16 +4,18 @@ from datetime import datetime
 # Will be set by the init script
 data_dir = None
 
-# Split the input images into two parts at y=1600.
-# We sample the patches from y<1600 to the train and y>1600 to the val.
-splity = 1600
+# Split the input images into two parts at y=(2154-512-1).
+# We sample the patches from y<1641 to the train and y>=1641 to the val.
+splity = 1641
 
 # Crop the top-left part of this sizem from the input to have equal size inputs.
 target_size = (2154, 2554)
 
 # The input will be sampled with this size.
-sample_crop = (256, 256, 1)
-net_input_shape = (256, 256, 7)
+sample_crop = (512, 512, 1)
+
+# As the network is fully convolutional it can be independent of the input shape.
+net_input_shape = (None, None, 7)
 
 train = False
 
