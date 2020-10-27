@@ -18,6 +18,7 @@ import config
 import init
 import stardist_blocks as sd
 
+
 class AZSequence(Sequence):
 
     def __init__(self, X, y, batch_size, sample_per_image=1, train_=True):
@@ -35,7 +36,6 @@ class AZSequence(Sequence):
         randmax = image_shape-np.array(list(crop_shape))
         topleft = np.array([random.randrange(r) for r in randmax])
         return tuple(slice(s, e) for (s, e) in zip(topleft, topleft+crop_shape))
-
 
     @staticmethod
     def read_stack(slice_paths, train_, normalize=False, random_subsample=False):
@@ -69,7 +69,6 @@ class AZSequence(Sequence):
             image[idx] = slice_
         return image
 
-
     @staticmethod
     def augment(image, rotate_angle: int, fliplr_tf: bool, flipud_tf: bool) -> np.ndarray:
         # AZSequence.count += 1
@@ -87,7 +86,6 @@ class AZSequence(Sequence):
         #     visualize(image_in, image)
 
         return image
-
 
     def __getitem__(self, idx):
         image_idx = idx // self.sample_per_image
@@ -131,6 +129,7 @@ class AZSequence(Sequence):
             # print('Batch y shape:', np.shape(image))
 
         return np.array(batch_x_images), np.array(batch_y_images)
+
 
 def get_dataset(data_dir, train_, sample_per_image=60):
     image_paths = glob('%s/*/input/*' % data_dir)
@@ -252,6 +251,7 @@ def get_network():
     model.compile(optimizer='adam', loss=channelwise_loss)
     return model
 
+
 def train(sequences, model):
     train, val = sequences
     mcp_save = tf.keras.callbacks.ModelCheckpoint('model-{epoch:03d}.h5', save_best_only=True, monitor='val_loss', mode='min')
@@ -261,10 +261,12 @@ def train(sequences, model):
         model.save_weights(config.save_checkpoint)
 
     return model
-'''
-If the model is set, it predicts the image using the model passed and shows the result.
-'''
+
+
 def test(sequence, model=None, save=False):
+    """
+    If the model is set, it predicts the image using the model passed and shows the result.
+    """
     for idx, (x, y) in enumerate(sequence):
         batch_element = 0
         plot_layout = 120
@@ -316,12 +318,12 @@ def test(sequence, model=None, save=False):
             imageio.imwrite(os.path.join(config.output_dir, '%d_bright.tif' % idx, bright))
             imageio.imwrite(os.path.join(config.output_dir, '%d_fluo.tif' % idx, fluo))
 
-
         imageio.volwrite('output/pred-%d.tif' % idx, y_pred_sample)
         imageio.volwrite('output/true-%d.tif' % idx, y_im)
         imageio.volwrite('output/input-%d.tif' % idx, np.transpose(x_sample, (2, 0, 1)))
 
     model.load_weights(config.save_checkpoint)
+
 
 if __name__ == '__main__':
     os.makedirs(config.output_dir, exist_ok=True)
@@ -330,12 +332,13 @@ if __name__ == '__main__':
     train_sequence = get_dataset(config.data_dir, train_=True, sample_per_image=20)
 
     model = get_network()
-    '''
+
     if config.save_checkpoint is not None:
         model.load_weights('model.h5')
-    '''
+        # model.load_weights('model-582.h5')
 
     model = train((train_sequence, val_sequence), model)
 
     # A (tranied) model can be passed to see the results.
     test(train_sequence, model)
+    # test(val_sequence, model)
