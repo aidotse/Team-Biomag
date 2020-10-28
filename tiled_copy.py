@@ -9,7 +9,8 @@ def get_tiles(x, k, n_tiles=None, overlap_ratio=.2):
     Parameters:
     x (list): the input array size
     k (int): the tile sizes intended to crop from the input
-    n_tiles (int)=none: the number of requested tiles to use or skipped
+    n_tiles (int)=none: the number of requested tiles
+        to use or skipped (should be at least 2 if defined)
     overlap_ratio (float)=.2: if the n_tiles is not specified, it will be determined
         based on the requested overlap ratio between the subsequent input tiles.
 
@@ -31,16 +32,19 @@ def get_tiles(x, k, n_tiles=None, overlap_ratio=.2):
     """
 
     if k > x or k < 1:
-        raise ValueError("The tile size should be positive and less than or equal to the input array size.")
+        raise ValueError("The tile size should be greater than 1 and less than or"
+            "equal to the input array size.")
 
-    if n_tiles is not None and x > n_tiles*k:
-        raise ValueError("The sum size of the tiles is less than the size of the input array.")
+    if n_tiles is not None and (x > n_tiles*k or n_tiles < 2):
+        raise ValueError("The sum of tiles should not be less than or equal to the"
+            "input and the number of tiles should be at lest 2.")
+
 
     # Compute the number of tiles automatically.
-    # If c is the margin we want to drop, then: x = 2*(k-c)+(n-2)*(k-c). Solving for n gives n=x/(k-2*x)-1.
+    # If c is the margin we want to drop, then: x = 2*(k-c)+(n-2)*(k-c). Solving for n gives n=x/(k-2*c)-1 if k > 2.
     if n_tiles is None:
         c = k*overlap_ratio
-        n_tiles = ceil(x/(k-2*c))-1
+        n_tiles = max(ceil(x/(k-2*c))-1, 2)
 
     # First, determine the centers for each input tile considering the input array coordinates.
     # The first and the last center is in k/2 distance from the sides.
@@ -98,7 +102,7 @@ def test():
     x = 587
     
     # tile size
-    k = 97
+    k = 587
 
     # number of tiles
     n_tiles = None
