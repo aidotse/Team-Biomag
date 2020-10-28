@@ -7,3 +7,5 @@ __pycache__
 init.py
 *.h5
 output
+
+set_paths.sh

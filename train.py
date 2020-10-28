@@ -17,16 +17,17 @@ import matplotlib.pyplot as plt
 import config
 import init
 import stardist_blocks as sd
-
+import tiled_copy
 
 class AZSequence(Sequence):
 
-    def __init__(self, X, y, batch_size, sample_per_image=1, train_=True):
+    def __init__(self, X, y, batch_size, sample_per_image=1, train_=True, random_subsample_input=True):
         random.seed(42)
         self.x, self.y = X, y
         self.batch_size = batch_size
         self.sample_per_image = sample_per_image
         self.train = train_
+        self.random_subsample_input = random_subsample_input
 
     def __len__(self):
         return math.ceil(len(self.x)*self.sample_per_image / self.batch_size)
@@ -38,7 +39,7 @@ class AZSequence(Sequence):
         return tuple(slice(s, e) for (s, e) in zip(topleft, topleft+crop_shape))
 
     @staticmethod
-    def read_stack(slice_paths, train_, normalize=False, random_subsample=False):
+    def read_stack(slice_paths, train_, normalize=False, random_subsample=None):
         # The same x-y crop will be applied to each brightflield slice and even on the fluo targets.
         for idx, im_path in enumerate(slice_paths):
             slice_ = imageio.imread(im_path).astype(np.float32)
@@ -46,7 +47,7 @@ class AZSequence(Sequence):
             if normalize:
                 slice_ = slice_/np.max(slice_)
 
-            if np.shape(slice_) != config.target_size:
+            if config.target_size is not None and np.shape(slice_) != config.target_size:
                 # Resize
                 #slice_ = transform.resize(slice_, config.target_size)
                 
@@ -58,12 +59,12 @@ class AZSequence(Sequence):
                 slice_ = slice_[:config.splity, :]
             else:
                 slice_ = slice_[config.splity:, :]
-            
+
             if random_subsample is not None:
                 slice_ = slice_[random_subsample]
 
             if idx == 0:
-                xy_shape =  (len(slice_paths),) + np.shape(slice_)
+                xy_shape = (len(slice_paths),) + np.shape(slice_)
                 image = np.zeros(xy_shape, slice_.dtype)
 
             image[idx] = slice_
@@ -104,6 +105,9 @@ class AZSequence(Sequence):
         else:
             random_subsample = AZSequence.get_random_crop((2154-config.splity, 2554), config.sample_crop[:2])
 
+        if not self.random_subsample_input:
+            random_subsample = None
+
         rotate_tf = np.random.uniform() < config.rotate_p
         if rotate_tf:
             rotate_angle = random.choice([90, 180, 270])
@@ -114,6 +118,7 @@ class AZSequence(Sequence):
 
         for batch_elem in batch_x:
             image = self.read_stack(batch_elem, self.train, True, random_subsample)
+            
             image = np.transpose(image, (1, 2, 0))
             if config.augment and self.train:
                 image = self.augment(image, rotate_angle, fliplr_tf, flipud_tf)
@@ -131,7 +136,7 @@ class AZSequence(Sequence):
         return np.array(batch_x_images), np.array(batch_y_images)
 
 
-def get_dataset(data_dir, train_, sample_per_image=60):
+def get_dataset(data_dir, train_, sample_per_image=60, random_subsample_input=True):
     image_paths = glob('%s/*/input/*' % data_dir)
     label_paths = glob('%s/*/targets/*' % data_dir)
 
@@ -181,7 +186,7 @@ def get_dataset(data_dir, train_, sample_per_image=60):
         x.append(images[k])
         y.append(labels[k])
 
-    return AZSequence(x, y, batch_size=1, sample_per_image=sample_per_image, train_=train_)
+    return AZSequence(x, y, batch_size=1, sample_per_image=sample_per_image, train_=train_, random_subsample_input=random_subsample_input)
 
 
 def visualize(original, augmented):
@@ -264,23 +269,45 @@ def train(sequences, model):
 
     return model
 
+def predict_tiled(x, y_channels, tile_sizes):
+    print(np.shape(x))
+    ys, xs = np.shape(x)[1], np.shape(x)[2]
+    (y_src, y_src_crop, y_target), (x_src, x_src_crop, x_target) = tiled_copy.get_tiles(ys, tile_sizes[0]), tiled_copy.get_tiles(xs, tile_sizes[1])
+    y_shape = np.shape(x)[:3] + (y_channels,)
+    stitched_y = np.zeros(y_shape, x.dtype)
 
-def test(sequence, model=None, save=False):
+    for y_idx in range(len(y_src)):
+        for x_idx in range(len(x_src)):
+            print('Predicting tile: y=%d, x=%d' % (y_idx, x_idx))
+            src_crop = (slice(None), slice(*y_src[y_idx]), slice(*x_src[x_idx]), slice(None)) 
+            src_tile_crop = (slice(None), slice(*y_src_crop[y_idx]), slice(*x_src_crop[x_idx]), slice(None))
+            target_crop = (slice(None), slice(*y_target[y_idx]), slice(*x_target[x_idx]), slice(None))
+
+            x_tile_predict = model.predict(x[src_crop])
+            stitched_y[target_crop] = x_tile_predict[src_tile_crop]
+    
+    return stitched_y
+
+def test(sequence, model=None, save=False, tile_sizes=None):
     """
     If the model is set, it predicts the image using the model passed and shows the result.
     """
     for idx, (x, y) in enumerate(sequence):
         batch_element = 0
-        plot_layout = 120
+        plot_layout = 140
 
         x_sample, y_sample = x[batch_element], y[batch_element]
-        
         z_pos = np.shape(x_sample)[-1]//2
         x_im, y_im = x_sample[..., z_pos], y_sample
 
         if model is not None:
             plot_layout = 240
-            y_pred = model.predict(x)
+
+            if tile_sizes is not None:
+                y_pred = predict_tiled(x, 3, tile_sizes)
+            else:
+                y_pred = model.predict(x)
+            
             y_pred_sample = y_pred[batch_element]
 
             y_pred_sample_normalized = np.zeros_like(y_pred_sample)
@@ -296,7 +323,8 @@ def test(sequence, model=None, save=False):
             plt.subplot(plot_layout + 8, title='Predicted Fluorescent (blue)')
             plt.imshow(y_pred_sample[..., 2])
 
-            if save:
+            if save and not config.readonly:
+                imageio.imwrite(os.path.join(config.output_dir, '%d_true.tif' % idx), y_sample)
                 imageio.imwrite(os.path.join(config.output_dir, '%d_pred.tif' % idx), y_pred_sample)
 
         plt.subplot(plot_layout + 1, title='Input Brightfield@Z=%d' % z_pos)
@@ -314,7 +342,7 @@ def test(sequence, model=None, save=False):
         plt.show()
         #plt.savefig('%d.png' % idx)
 
-        if save:
+        if save and False:
             bright = (x_sample[..., 1]*255).astype(np.uint8)
             fluo = (y_sample*255).astype(np.uint8)
             
@@ -328,9 +356,11 @@ def test(sequence, model=None, save=False):
 
 
 if __name__ == '__main__':
-    os.makedirs(config.output_dir, exist_ok=True)
+    if not config.readonly:
+        os.makedirs(config.output_dir, exist_ok=True)
 
     val_sequence = get_dataset(config.data_dir, train_=False, sample_per_image=2)
+    train_sequence = get_dataset(config.data_dir, train_=True, sample_per_image=1, random_subsample_input=False)
 
     model = get_network()
 
@@ -339,7 +369,9 @@ if __name__ == '__main__':
         model.load_weights(config.init_weights)
 
     if config.train == True:
-        train_sequence = get_dataset(config.data_dir, train_=True, sample_per_image=20)
+
         model = train((train_sequence, val_sequence), model)
 
-    test(val_sequence, model)
+    
+    test(train_sequence, model, tile_sizes=(512, 512), save=True)
+    #test(train_sequence)
