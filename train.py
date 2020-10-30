@@ -2,7 +2,6 @@ from glob import glob
 from collections import defaultdict
 import os
 import math
-import random
 from random import Random
 
 import numpy as np
@@ -42,9 +41,7 @@ class AZSequence(Sequence):
 
     def on_epoch_end(self):
         if self.resetseed is True:
-            print('...... random before reseed: %d' % self.rand_instance.randint(50, 100))
             self.rand_instance.seed(self.seed)
-            print('...... random after reseed: %d; new seed: %d' % (self.rand_instance.randint(50, 100), self.seed))
 
     def get_random_crop(self, image_shape, crop_shape):
         randmax = image_shape-np.array(list(crop_shape))
@@ -376,8 +373,8 @@ if __name__ == '__main__':
     if not config.readonly:
         os.makedirs(config.output_dir, exist_ok=True)
 
-    train_sequence = get_dataset(config.data_dir, train_=True, sample_per_image=5, random_subsample_input=True, seed=42)
-    val_sequence = get_dataset(config.data_dir, train_=False, sample_per_image=5, random_subsample_input=True, seed=42, resetseed=True)
+    train_sequence = get_dataset(config.data_dir, train_=True, sample_per_image=20, random_subsample_input=True, seed=config.seed)
+    val_sequence = get_dataset(config.data_dir, train_=False, sample_per_image=8, random_subsample_input=True, seed=config.seed, resetseed=True)
 
     test_sequence = get_dataset(config.data_dir, train_=False, sample_per_image=1, random_subsample_input=False)
 

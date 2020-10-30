@@ -1,6 +1,8 @@
 import os
 from datetime import datetime
 
+seed = 42
+
 # Will be set by the init script
 data_dir = None
 
@@ -34,4 +36,4 @@ flipud_p = 0.5
 readonly = False
 
 # Wether to save the predicted images or not.
-save = False
+save = True
