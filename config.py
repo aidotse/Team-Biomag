@@ -17,7 +17,7 @@ sample_crop = (512, 512, 1)
 # As the network is fully convolutional it can be independent of the input shape.
 net_input_shape = (None, None, 7)
 
-train = False
+train = True
 
 # The outputs will go to the output/$CURRENT-DATE
 TRAIN_ID = datetime.now().strftime("%Y-%m%d_%H-%M-%S")
@@ -26,9 +26,12 @@ output_dir = os.path.join('output', TRAIN_ID)
 init_weights = None
 
 # augmentation on/off and probabilities
-augment = False
+augment = True
 rotate_p = 0.5
 fliplr_p = 0.5
 flipud_p = 0.5
 
-readonly = True
+readonly = False
+
+# Wether to save the predicted images or not.
+save = False

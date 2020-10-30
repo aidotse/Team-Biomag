@@ -3,6 +3,7 @@ from collections import defaultdict
 import os
 import math
 import random
+from random import Random
 
 import numpy as np
 import tensorflow as tf
@@ -19,10 +20,17 @@ import init
 import stardist_blocks as sd
 import tiled_copy
 
+
 class AZSequence(Sequence):
 
-    def __init__(self, X, y, batch_size, sample_per_image=1, train_=True, random_subsample_input=True):
-        random.seed(42)
+    def __init__(self, X, y, batch_size, sample_per_image=1, train_=True, random_subsample_input=True, seed=None, resetseed=False):
+        self.rand_instance = Random()
+        self.seed = seed
+        self.resetseed = resetseed
+        
+        if self.seed is not None:
+            self.rand_instance.seed(self.seed)
+
         self.x, self.y = X, y
         self.batch_size = batch_size
         self.sample_per_image = sample_per_image
@@ -32,10 +40,15 @@ class AZSequence(Sequence):
     def __len__(self):
         return math.ceil(len(self.x)*self.sample_per_image / self.batch_size)
 
-    @staticmethod
-    def get_random_crop(image_shape, crop_shape):
+    def on_epoch_end(self):
+        if self.resetseed is True:
+            print('...... random before reseed: %d' % self.rand_instance.randint(50, 100))
+            self.rand_instance.seed(self.seed)
+            print('...... random after reseed: %d; new seed: %d' % (self.rand_instance.randint(50, 100), self.seed))
+
+    def get_random_crop(self, image_shape, crop_shape):
         randmax = image_shape-np.array(list(crop_shape))
-        topleft = np.array([random.randrange(r) for r in randmax])
+        topleft = np.array([self.rand_instance.randrange(r) for r in randmax])
         return tuple(slice(s, e) for (s, e) in zip(topleft, topleft+crop_shape))
 
     @staticmethod
@@ -101,16 +114,16 @@ class AZSequence(Sequence):
         batch_y_images = []
 
         if self.train:
-            random_subsample = AZSequence.get_random_crop((config.splity, 2554), config.sample_crop[:2])
+            random_subsample = self.get_random_crop((config.splity, 2554), config.sample_crop[:2])
         else:
-            random_subsample = AZSequence.get_random_crop((2154-config.splity, 2554), config.sample_crop[:2])
+            random_subsample = self.get_random_crop((2154-config.splity, 2554), config.sample_crop[:2])
 
         if not self.random_subsample_input:
             random_subsample = None
 
         rotate_tf = np.random.uniform() < config.rotate_p
-        if rotate_tf:
-            rotate_angle = random.choice([90, 180, 270])
+        if rotate_tf and config.augment:
+            rotate_angle = self.rand_instance.choice([90, 180, 270])
         else:
             rotate_angle = 0
         fliplr_tf = np.random.uniform() < config.fliplr_p
@@ -128,6 +141,7 @@ class AZSequence(Sequence):
         for batch_elem in batch_y:
             image = self.read_stack(batch_elem, self.train, True, random_subsample)
             image = np.transpose(image, (1, 2, 0))
+
             if config.augment and self.train:
                 image = self.augment(image, rotate_angle, fliplr_tf, flipud_tf)
             batch_y_images.append(image)
@@ -136,7 +150,7 @@ class AZSequence(Sequence):
         return np.array(batch_x_images), np.array(batch_y_images)
 
 
-def get_dataset(data_dir, train_, sample_per_image=60, random_subsample_input=True):
+def get_dataset(data_dir, train_, sample_per_image=60, random_subsample_input=True, seed=None, resetseed=None):
     image_paths = glob('%s/*/input/*' % data_dir)
     label_paths = glob('%s/*/targets/*' % data_dir)
 
@@ -186,7 +200,9 @@ def get_dataset(data_dir, train_, sample_per_image=60, random_subsample_input=Tr
         x.append(images[k])
         y.append(labels[k])
 
-    return AZSequence(x, y, batch_size=1, sample_per_image=sample_per_image, train_=train_, random_subsample_input=random_subsample_input)
+    return AZSequence(
+        x, y, batch_size=1, sample_per_image=sample_per_image, train_=train_, 
+        random_subsample_input=random_subsample_input, resetseed=resetseed, seed=seed)
 
 
 def visualize(original, augmented):
@@ -265,7 +281,7 @@ def train(sequences, model):
     if not config.readonly:
         callbacks += [mcp_save]
 
-    model.fit(train, validation_data=val, epochs=1000, callbacks=callbacks)
+    model.fit(train, validation_data=val, epochs=1000, callbacks=callbacks, initial_epoch=config.initial_epoch)
 
     return model
 
@@ -324,6 +340,7 @@ def test(sequence, model=None, save=False, tile_sizes=None):
             plt.imshow(y_pred_sample[..., 2])
 
             if save and not config.readonly:
+                imageio.imwrite(os.path.join(config.output_dir, '%d_bright.tif' % idx), x_im)
                 imageio.imwrite(os.path.join(config.output_dir, '%d_true.tif' % idx), y_sample)
                 imageio.imwrite(os.path.join(config.output_dir, '%d_pred.tif' % idx), y_pred_sample)
 
@@ -359,8 +376,10 @@ if __name__ == '__main__':
     if not config.readonly:
         os.makedirs(config.output_dir, exist_ok=True)
 
-    val_sequence = get_dataset(config.data_dir, train_=False, sample_per_image=2)
-    train_sequence = get_dataset(config.data_dir, train_=True, sample_per_image=1, random_subsample_input=False)
+    train_sequence = get_dataset(config.data_dir, train_=True, sample_per_image=5, random_subsample_input=True, seed=42)
+    val_sequence = get_dataset(config.data_dir, train_=False, sample_per_image=5, random_subsample_input=True, seed=42, resetseed=True)
+
+    test_sequence = get_dataset(config.data_dir, train_=False, sample_per_image=1, random_subsample_input=False)
 
     model = get_network()
 
@@ -369,9 +388,8 @@ if __name__ == '__main__':
         model.load_weights(config.init_weights)
 
     if config.train == True:
-
         model = train((train_sequence, val_sequence), model)
 
     
-    test(train_sequence, model, tile_sizes=(512, 512), save=True)
+    test(test_sequence, model, tile_sizes=tuple(config.sample_crop[:2]), save=config.save)
     #test(train_sequence)
