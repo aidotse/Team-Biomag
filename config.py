@@ -37,3 +37,6 @@ readonly = False
 
 # Wether to save the predicted images or not.
 save = True
+
+# Whether to run the code on the local computer, or use the dgx8 format...
+local_run = True

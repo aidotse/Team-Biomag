@@ -148,8 +148,23 @@ class AZSequence(Sequence):
 
 
 def get_dataset(data_dir, train_, sample_per_image=60, random_subsample_input=True, seed=None, resetseed=None):
-    image_paths = glob('%s/*/input/*' % data_dir)
-    label_paths = glob('%s/*/targets/*' % data_dir)
+    if config.local_run:
+        image_paths = glob('%s/*/input/*' % data_dir)
+        label_paths = glob('%s/*/targets/*' % data_dir)
+    else:
+        image_paths = []
+        label_paths = []
+        magnifications = ['20x', '40x', '60x']
+        for magnification in magnifications:
+            glob_im = '%s/%s/*A04*' % (data_dir, magnification)
+            print(glob_im)
+            image_paths += glob(glob_im)
+            for ch in ['1', '2', '3']:
+                glob_lab = '%s/%s/*A0%s*' % (data_dir, magnification, ch)
+                label_paths += glob(glob_lab)
+
+    print('Number of images read:', len(image_paths))
+    print('Number of labels read:', len(label_paths))
 
     label_paths.sort()
     image_paths.sort()
@@ -174,11 +189,18 @@ def get_dataset(data_dir, train_, sample_per_image=60, random_subsample_input=Tr
 
     def get_im_id(im_path):
         base = os.path.basename(im_path)
+        print('Base:', base)
         im_id = base[:len('_D04_T0001F008L01A04Z04C04.tif')]
+        print('Im id:', im_id)
         return im_id
 
     def get_res(im_path):
-        return os.path.basename(os.path.dirname(os.path.dirname(im_path)))[:3]
+        if config.local_run:
+            return os.path.basename(
+                os.path.dirname(os.path.dirname(im_path)))[:3]
+        else:
+            return os.path.basename(
+                    os.path.dirname(im_path))[:3]
 
     images, labels = defaultdict(list), defaultdict(list)
 
