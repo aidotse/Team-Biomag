@@ -3,4 +3,4 @@ if [ "$#" -ne 1 ]; then
     exit
 fi
 
-docker run -it --gpus all --rm --name adipocyte -u $(id -u):$(id -g) -v $PWD:/biomag -v $1:/data biomag:adipocyte python train.py
+docker run -it --rm --name biomag-adipocyte -u $(id -u):$(id -g) -v $PWD:/biomag -v $1:/data biomag:adipocyte python train.py
