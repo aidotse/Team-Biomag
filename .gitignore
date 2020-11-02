@@ -1,0 +1,11 @@
+.idea
+.venv
+.vscode
+
+__pycache__
+
+init.py
+*.h5
+output
+
+set_paths.sh
