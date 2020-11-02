@@ -189,9 +189,7 @@ def get_dataset(data_dir, train_, sample_per_image=60, random_subsample_input=Tr
 
     def get_im_id(im_path):
         base = os.path.basename(im_path)
-        print('Base:', base)
         im_id = base[:len('_D04_T0001F008L01A04Z04C04.tif')]
-        print('Im id:', im_id)
         return im_id
 
     def get_res(im_path):

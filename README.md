@@ -1,4 +1,4 @@
-# BIOMAG Adipocyte challenge code
+# Biomag
 
 ## Setting up
 Python 3.7 is recommended.
