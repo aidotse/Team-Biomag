@@ -65,10 +65,12 @@ class AZSequence(Sequence):
                 global_crop = tuple(slice(None, s) for s in config.target_size)
                 slice_ = slice_[global_crop]
 
+            """
             if train_:
                 slice_ = slice_[:config.splity, :]
             else:
                 slice_ = slice_[config.splity:, :]
+            """
 
             if random_subsample is not None:
                 slice_ = slice_[random_subsample]
@@ -110,10 +112,15 @@ class AZSequence(Sequence):
         batch_x_images = []
         batch_y_images = []
 
+        """
         if self.train:
             random_subsample = self.get_random_crop((config.splity, 2554), config.sample_crop[:2])
         else:
             random_subsample = self.get_random_crop((2154-config.splity, 2554), config.sample_crop[:2])
+        """
+
+        random_subsample = self.get_random_crop((2154, 2554), config.sample_crop[:2])
+
 
         if not self.random_subsample_input:
             random_subsample = None
@@ -160,6 +167,9 @@ def get_images_list(data_dir):
         image_paths_ = []
         label_paths_ = []
         magnifications = ['20x', '40x', '60x']
+
+        magnifications = [magnifications[0]]
+
         for magnification in magnifications:
             glob_im = '%s/%s/*A04*' % (data_dir, magnification)
             print(glob_im)
@@ -298,13 +308,16 @@ def get_network():
         total_loss = 0.
         
         weights = [.5, .2, .3]
+        #weights = [1., 1., 1.]
 
         for ch in [0, 1, 2]:
-            #total_loss += MeanSquaredError()(y_true[..., ch], y_pred[..., ch])
+            total_loss += weights[ch] * MeanSquaredError()(y_true[..., ch], y_pred[..., ch])
+            '''
             total_loss += weights[ch] * BinaryCrossentropy(reduction=tf.keras.losses.Reduction.NONE)(
                         y_true[..., ch], 
                         y_pred[..., ch]
                     )
+            '''
 
 
         # The first channel is the nuclei
@@ -333,13 +346,13 @@ def get_network():
 
 def train(sequences, model):
     train, val = sequences
-    mcp_save = tf.keras.callbacks.ModelCheckpoint('%s/model-{epoch:04d}-{val_loss:.2f}.h5' % config.output_dir, save_best_only=True, monitor='val_loss', mode='min')
+    mcp_save = tf.keras.callbacks.ModelCheckpoint('%s/model-{epoch:04d}-{val_loss:.4f}.h5' % config.output_dir, save_best_only=True, monitor='val_loss', mode='min')
     callbacks = []
     
     if not config.readonly:
         callbacks += [mcp_save]
 
-    model.fit(train, validation_data=val, epochs=200, callbacks=callbacks, initial_epoch=config.initial_epoch, steps_per_epoch=200)
+    model.fit(train, validation_data=val, epochs=400, callbacks=callbacks, initial_epoch=config.initial_epoch, steps_per_epoch=200)
 
     return model
 
@@ -435,7 +448,7 @@ if __name__ == '__main__':
         os.makedirs(config.output_dir, exist_ok=True)
 
     # Leave out wells for validation
-    lo_ws = ['D04']
+    lo_ws = ['B03']
 
     train_sequence = get_dataset(config.data_dir, train_=True, sample_per_image=20, random_subsample_input=True, seed=config.seed, filter_fun=lambda im: info(im)[1] not in lo_ws)
     val_sequence = get_dataset(config.data_dir, train_=False, sample_per_image=8, random_subsample_input=True, seed=config.seed, resetseed=True, filter_fun=lambda im: info(im)[1] in lo_ws)
