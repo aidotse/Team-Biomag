@@ -126,14 +126,19 @@ class AZSequence(Sequence):
         fliplr_tf = np.random.uniform() < config.fliplr_p
         flipud_tf = np.random.uniform() < config.flipud_p
 
+        import pprint
+        pp = pprint.PrettyPrinter(indent=4)
+
+        #print('..............')
+        #pp.pprint(batch_x)
+
         for batch_elem in batch_x:
             image = self.read_stack(batch_elem, self.train, True, random_subsample)
-            
             image = np.transpose(image, (1, 2, 0))
             if config.augment and self.train:
                 image = self.augment(image, rotate_angle, fliplr_tf, flipud_tf)
             batch_x_images.append(image)
-            # print('Batch X shape:', np.shape(image))
+            #print('Batch X shape:', np.shape(image))
 
         for batch_elem in batch_y:
             image = self.read_stack(batch_elem, self.train, True, random_subsample)
@@ -142,29 +147,59 @@ class AZSequence(Sequence):
             if config.augment and self.train:
                 image = self.augment(image, rotate_angle, fliplr_tf, flipud_tf)
             batch_y_images.append(image)
-            # print('Batch y shape:', np.shape(image))
+            #print('Batch y shape:', np.shape(image))
 
         return np.array(batch_x_images), np.array(batch_y_images)
 
 
-def get_dataset(data_dir, train_, sample_per_image=60, random_subsample_input=True, seed=None, resetseed=None):
+def get_images_list(data_dir):
     if config.local_run:
-        image_paths = glob('%s/*/input/*' % data_dir)
-        label_paths = glob('%s/*/targets/*' % data_dir)
+        image_paths_ = glob('%s/*/input/*' % data_dir)
+        label_paths_ = glob('%s/*/targets/*' % data_dir)
     else:
-        image_paths = []
-        label_paths = []
+        image_paths_ = []
+        label_paths_ = []
         magnifications = ['20x', '40x', '60x']
         for magnification in magnifications:
             glob_im = '%s/%s/*A04*' % (data_dir, magnification)
             print(glob_im)
-            image_paths += glob(glob_im)
+            image_paths_ += glob(glob_im)
             for ch in ['1', '2', '3']:
                 glob_lab = '%s/%s/*A0%s*' % (data_dir, magnification, ch)
-                label_paths += glob(glob_lab)
+                label_paths_ += glob(glob_lab)
 
-    print('Number of images read:', len(image_paths))
-    print('Number of labels read:', len(label_paths))
+    return image_paths_, label_paths_
+
+def info(im_name):
+    im_bname = os.path.basename(im_name)
+    experiment = im_bname[:len('AssayPlate_Greiner_#655090')]
+    well = im_bname[len('AssayPlate_Greiner_#655090_'):len('AssayPlate_Greiner_#655090_')+3]
+    field = im_bname[len('AssayPlate_Greiner_#655090_D04_T0001F'):len('AssayPlate_Greiner_#655090_D04_T0001F')+3]
+
+    return experiment, well, field
+
+def get_dataset(data_dir, train_, sample_per_image=60, random_subsample_input=True, seed=None, resetseed=None, filter_fun=None):    
+    image_paths_, label_paths_ = get_images_list(data_dir)
+    print('Number of image files discovered:', len(image_paths_))
+    print('Number of label files discovered:', len(label_paths_))
+
+    image_paths, label_paths = [], []
+    def filter_(paths, filter_fun_):
+        result_ = []
+        for path_ in paths:
+            if filter_fun_(path_):
+                result_.append(path_)
+
+        return result_
+
+    image_paths, label_paths = image_paths_, label_paths_
+
+    if filter_fun is not None:
+        image_paths = filter_(image_paths_, filter_fun)
+        label_paths = filter_(label_paths, filter_fun)
+
+    print('Number of selected files:', len(image_paths))
+    print('Number of selected labels:', len(label_paths))
 
     label_paths.sort()
     image_paths.sort()
@@ -185,11 +220,17 @@ def get_dataset(data_dir, train_, sample_per_image=60, random_subsample_input=Tr
     A04: action (fluorescents + brightfield)
     Z03: slice number
     C04: same as action
+
+
+    20x:    48
+    40x:    64
+    60x:    96
+
     '''
 
     def get_im_id(im_path):
         base = os.path.basename(im_path)
-        im_id = base[:len('_D04_T0001F008L01A04Z04C04.tif')]
+        im_id = base[:len('AssayPlate_Greiner_#655090_D04_T0001F006')]
         return im_id
 
     def get_res(im_path):
@@ -213,7 +254,7 @@ def get_dataset(data_dir, train_, sample_per_image=60, random_subsample_input=Tr
     x, y = [], []
 
     for k in labels.keys():
-        print('Image found:', k)
+        #print('Image found:', k)
         x.append(images[k])
         y.append(labels[k])
 
@@ -298,7 +339,7 @@ def train(sequences, model):
     if not config.readonly:
         callbacks += [mcp_save]
 
-    model.fit(train, validation_data=val, epochs=1000, callbacks=callbacks, initial_epoch=config.initial_epoch)
+    model.fit(train, validation_data=val, epochs=200, callbacks=callbacks, initial_epoch=config.initial_epoch, steps_per_epoch=200)
 
     return model
 
@@ -393,10 +434,13 @@ if __name__ == '__main__':
     if not config.readonly:
         os.makedirs(config.output_dir, exist_ok=True)
 
-    train_sequence = get_dataset(config.data_dir, train_=True, sample_per_image=20, random_subsample_input=True, seed=config.seed)
-    val_sequence = get_dataset(config.data_dir, train_=False, sample_per_image=8, random_subsample_input=True, seed=config.seed, resetseed=True)
+    # Leave out wells for validation
+    lo_ws = ['D04']
 
-    test_sequence = get_dataset(config.data_dir, train_=False, sample_per_image=1, random_subsample_input=False)
+    train_sequence = get_dataset(config.data_dir, train_=True, sample_per_image=20, random_subsample_input=True, seed=config.seed, filter_fun=lambda im: info(im)[1] not in lo_ws)
+    val_sequence = get_dataset(config.data_dir, train_=False, sample_per_image=8, random_subsample_input=True, seed=config.seed, resetseed=True, filter_fun=lambda im: info(im)[1] in lo_ws)
+
+    #test_sequence = get_dataset(config.data_dir, train_=False, sample_per_image=1, random_subsample_input=False)
 
     model = get_network()
 
@@ -408,5 +452,5 @@ if __name__ == '__main__':
         model = train((train_sequence, val_sequence), model)
 
     
-    test(test_sequence, model, tile_sizes=tuple(config.sample_crop[:2]), save=config.save)
+    #test(test_sequence, model, tile_sizes=tuple(config.sample_crop[:2]), save=config.save)
     #test(train_sequence)
