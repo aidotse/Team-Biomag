@@ -10,8 +10,16 @@ from os.path import isfile, join
 # output_folder = "/home/koosk/data/images/adipocyte/dataset/20x-tiles"
 # input_folder = "/home/koosk/data/images/adipocyte/dataset/40x"
 # output_folder = "/home/koosk/data/images/adipocyte/dataset/40x-tiles"
-input_folder = "/home/koosk/data/images/adipocyte/dataset/60x"
-output_folder = "/home/koosk/data/images/adipocyte/dataset/60x-tiles"
+# input_folder = "/home/koosk/data/images/adipocyte/dataset/60x"
+# output_folder = "/home/koosk/data/images/adipocyte/dataset/60x-tiles"
+# input_folder = "/home/koosk/data/images/adipocyte/dataset/20x-nuclei_thresholded"
+# output_folder = "/home/koosk/data/images/adipocyte/dataset/20x-nuclei_thresholded-tiled"
+# input_folder = "/home/koosk/data/images/adipocyte/dataset/40x-nuclei_thresholded"
+# output_folder = "/home/koosk/data/images/adipocyte/dataset/40x-nuclei_thresholded-tiled"
+input_folder = "/home/koosk/data/images/adipocyte/dataset/60x-nuclei_thresholded"
+output_folder = "/home/koosk/data/images/adipocyte/dataset/60x-nuclei_thresholded-tiled"
+# input_folder = "/home/koosk/data/images/adipocyte/nuclei_mask-20x"
+# input_folder = "/home/koosk/data/images/adipocyte/nuclei_mask-20x-tiled"
 tile_size = 512
 
 
