@@ -24,7 +24,7 @@ if __name__ == '__main__':
             continue
         img = imageio.imread(input_file).astype(np.float32)
         img = img - np.min(img)
-        img = img / np.max(img) * 256
+        img = img / np.max(img) * 255
         img = img.astype('uint8')
         im_bname = os.path.basename(input_file)
         imshape = (np.shape(img))
