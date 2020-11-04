@@ -106,21 +106,13 @@ class AZSequence(Sequence):
     def __getitem__(self, idx):
         def normalize(im, low, high):
             """ Threshold and divide """
-            s = np.sort(np.reshape(im, (-1,)))
-            l = len(im)
-            p = round(l/100)
-            print('Normalizing: threshold:', high, 'max:', np.max(im), '100th', s[p], '-100th', s[-p])
+            histo = False
+            if histo:
+                im[im > high] = high
+                im = im / high
+            else:
+                im /= 65535
 
-            im[im > high] = high
-            im[im < low] = low
-
-            im = im - low
-            im = im / (high-low)
-
-            #im = im / high
-
-            plt.imshow(im)
-            plt.show()
             return im
 
         image_idx = idx // self.sample_per_image
@@ -433,7 +425,7 @@ def test(sequence, model=None, save=False, tile_sizes=None):
 
             y_pred_sample_normalized = np.zeros_like(y_pred_sample)
             for ch in range(np.shape(y_pred_sample)[-1]):
-                y_pred_sample_normalized[..., ch] = y_pred_sample[..., ch] / np.max(y_pred_sample[..., ch])
+                y_pred_sample_normalized[..., ch] = y_pred_sample[..., ch] / 65535
 
             plt.subplot(plot_layout + 6, title='Predicted fluorescent (red)')
             plt.imshow(y_pred_sample[..., 0])

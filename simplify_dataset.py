@@ -37,6 +37,7 @@ if __name__ == '__main__':
 
 
     data_folder = '/home/ervin/Dokumentumok/brc/Adipocyte/sample'
+    data_folder = '/media/ervin/SSD-Data/adipocyte/data'
     out_path = 'out'
 
     """
@@ -69,7 +70,8 @@ if __name__ == '__main__':
         for idx, k in enumerate(ims.keys()):
             merged = []
             for ch_id, im in enumerate(ims[k][:3]):
-                ch = imageio.imread(os.path.join(data_folder, magnification, im))
+                im_path = os.path.join(data_folder, magnification, im)
+                ch = imageio.imread(im_path)
                 
                 sort_ch = np.sort(np.reshape(ch, (-1,)))
                 n = len(sort_ch)
@@ -79,9 +81,11 @@ if __name__ == '__main__':
 
                 low[ch_id].append(a)
                 high[ch_id].append(b)
-            
+                print(im_path, a, b)
+
             for b in ims[k][3:]:
-                b_im = imageio.imread(os.path.join(data_folder, magnification, b))
+                im_path = os.path.join(data_folder, magnification, b)
+                b_im = imageio.imread(im_path)
 
                 sort_ch = np.sort(np.reshape(b_im, (-1,)))
                 n = len(sort_ch)
@@ -92,7 +96,7 @@ if __name__ == '__main__':
                 ch_id = 3
                 low[ch_id].append(a)
                 high[ch_id].append(b)
-
+                print(im_path, a, b)
         low_med, high_med = get_med_ch(low, high)
         print('Computed histo stretch limit (med) for each channel:', low_med, high_med)
 
