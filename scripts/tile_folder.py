@@ -6,12 +6,20 @@ from os.path import isfile, join
 
 # input_folder = "/home/koosk/data/images/adipocyte/tmp/"
 # output_folder = "/home/koosk/data/images/adipocyte/tmp/tiles"
-# input_folder = "/home/koosk/data/images/adipocyte/dataset/20x"
-# output_folder = "/home/koosk/data/images/adipocyte/dataset/20x-tiles"
+input_folder = "/home/koosk/data/images/adipocyte/dataset/20x"
+output_folder = "/home/koosk/data/images/adipocyte/dataset/20x-tiles"
 # input_folder = "/home/koosk/data/images/adipocyte/dataset/40x"
 # output_folder = "/home/koosk/data/images/adipocyte/dataset/40x-tiles"
-input_folder = "/home/koosk/data/images/adipocyte/dataset/60x"
-output_folder = "/home/koosk/data/images/adipocyte/dataset/60x-tiles"
+# input_folder = "/home/koosk/data/images/adipocyte/dataset/60x"
+# output_folder = "/home/koosk/data/images/adipocyte/dataset/60x-tiles"
+# input_folder = "/home/koosk/data/images/adipocyte/dataset/20x-nuclei_thresholded"
+# output_folder = "/home/koosk/data/images/adipocyte/dataset/20x-nuclei_thresholded-tiled"
+# input_folder = "/home/koosk/data/images/adipocyte/dataset/40x-nuclei_thresholded"
+# output_folder = "/home/koosk/data/images/adipocyte/dataset/40x-nuclei_thresholded-tiled"
+# input_folder = "/home/koosk/data/images/adipocyte/dataset/60x-nuclei_thresholded"
+# output_folder = "/home/koosk/data/images/adipocyte/dataset/60x-nuclei_thresholded-tiled"
+# input_folder = "/home/koosk/data/images/adipocyte/nuclei_mask-20x"
+# input_folder = "/home/koosk/data/images/adipocyte/nuclei_mask-20x-tiled"
 tile_size = 512
 
 
@@ -24,7 +32,7 @@ if __name__ == '__main__':
             continue
         img = imageio.imread(input_file).astype(np.float32)
         img = img - np.min(img)
-        img = img / np.max(img) * 256
+        img = img / np.max(img) * 255
         img = img.astype('uint8')
         im_bname = os.path.basename(input_file)
         imshape = (np.shape(img))
