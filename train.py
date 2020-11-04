@@ -113,6 +113,9 @@ class AZSequence(Sequence):
             else:
                 im /= 65535
 
+            plt.imshow(im)
+            plt.show()
+
             return im
 
         image_idx = idx // self.sample_per_image
@@ -162,7 +165,7 @@ class AZSequence(Sequence):
             for z in range(len(batch_elem)):
                 print('Image:', batch_elem[z])
                 image[..., z] = normalize(image[..., z], norm[mag_level]['low'][3], norm[mag_level]['high'][3])
-                imageio.imwrite('l/%d-%d.png' % (z, idx), (image[..., z]*255).astype(np.uint8))
+                #imageio.imwrite('l/%d-%d.png' % (z, idx), (image[..., z]*255).astype(np.uint8))
             if config.augment and self.train:
                 image = self.augment(image, rotate_angle, fliplr_tf, flipud_tf)
             batch_x_images.append(image)
@@ -177,7 +180,7 @@ class AZSequence(Sequence):
                 print('Image:', batch_elem[ch])
                 image[..., ch] = normalize(image[..., ch], norm[mag_level]['low'][ch], norm[mag_level]['high'][ch])
 
-            imageio.imwrite('l/%d-%d.png' % (z, idx), (image*255).astype(np.uint8))
+            #imageio.imwrite('l/%d-%d.png' % (z, idx), (image*255).astype(np.uint8))
 
             if config.augment and self.train:
                 image = self.augment(image, rotate_angle, fliplr_tf, flipud_tf)
@@ -474,7 +477,7 @@ if __name__ == '__main__':
         os.makedirs(config.output_dir, exist_ok=True)
 
     # Leave out wells for validation
-    lo_ws = ['F001']
+    lo_ws = ['B03']
 
     train_sequence = get_dataset(
         config.data_dir, 
@@ -482,7 +485,7 @@ if __name__ == '__main__':
         sample_per_image=20, 
         random_subsample_input=True, 
         seed=config.seed, 
-        filter_fun=lambda im: info(im)[2] not in lo_ws)
+        filter_fun=lambda im: info(im)[1] not in lo_ws)
     val_sequence = get_dataset(
         config.data_dir, 
         train_=False, 
@@ -490,7 +493,7 @@ if __name__ == '__main__':
         random_subsample_input=True, 
         seed=config.seed, 
         resetseed=True,
-         filter_fun=lambda im: info(im)[2] in lo_ws)
+         filter_fun=lambda im: info(im)[1] in lo_ws)
 
     #test_sequence = get_dataset(config.data_dir, train_=False, sample_per_image=1, random_subsample_input=False)
 
