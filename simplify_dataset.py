@@ -8,6 +8,8 @@ import numpy as np
 import pprint
 import json
 
+import config
+
 pp = pprint.PrettyPrinter(indent=4)
 
 if __name__ == '__main__':
@@ -34,7 +36,7 @@ if __name__ == '__main__':
         return ch
 
 
-    data_folder = '/mnt/Data2/etasnadi/adipocyte-data/data'
+    data_folder = '/home/ervin/Dokumentumok/brc/Adipocyte/sample'
     out_path = 'out'
 
     """
@@ -48,7 +50,7 @@ if __name__ == '__main__':
 
     ims = defaultdict(list)
 
-    magnifications = ['40x']
+    magnifications = ['60x']
     for magnification in magnifications:
         os.makedirs('%s/%s' % (out_path, magnification), exist_ok=True)
         data_path = os.path.join(data_folder, magnification)
@@ -126,4 +128,4 @@ if __name__ == '__main__':
             for b in ims[k][3:]:
                 b_im = imageio.imread(os.path.join(data_folder, magnification, b))
                 b_im = equalize(b_im, low_med[ch_id], high_med[ch_id])
-                imageio.imwrite('%s/%s/%s.png' % (out_path, magnification, b), b_im)
+                imageio.imwrite('%s/%s/%s.png' % (out_path, magnification, b[:-4]), b_im)

@@ -19,6 +19,12 @@ import init
 import stardist_blocks as sd
 import tiled_copy
 
+norm = {
+    '20x': {'low': {0: 37, 1: 7, 2: 258, 3: 828}, 'high': {0: 2652, 1: 2096, 2: 1345, 3: 5953}},
+    '40x': {'low': {0: 25, 1: 23, 2: 6, 3: 218}, 'high': {0: 2507, 1: 2438, 2: 1682, 3: 1635}},
+    '60x': {'low': {0: 23, 1: 23, 2: 27, 3: 141}, 'high': {0: 2000, 1: 2059, 2: 1904, 3: 1339}}
+}
+
 
 class AZSequence(Sequence):
 
@@ -49,13 +55,10 @@ class AZSequence(Sequence):
         return tuple(slice(s, e) for (s, e) in zip(topleft, topleft+crop_shape))
 
     @staticmethod
-    def read_stack(slice_paths, train_, normalize=False, random_subsample=None):
+    def read_stack(slice_paths, train_, random_subsample=None):
         # The same x-y crop will be applied to each brightflield slice and even on the fluo targets.
         for idx, im_path in enumerate(slice_paths):
             slice_ = imageio.imread(im_path).astype(np.float32)
-
-            if normalize:
-                slice_ = slice_/np.max(slice_)
 
             if config.target_size is not None and np.shape(slice_) != config.target_size:
                 # Resize
@@ -101,6 +104,25 @@ class AZSequence(Sequence):
         return image
 
     def __getitem__(self, idx):
+        def normalize(im, low, high):
+            """ Threshold and divide """
+            s = np.sort(np.reshape(im, (-1,)))
+            l = len(im)
+            p = round(l/100)
+            print('Normalizing: threshold:', high, 'max:', np.max(im), '100th', s[p], '-100th', s[-p])
+
+            im[im > high] = high
+            im[im < low] = low
+
+            im = im - low
+            im = im / (high-low)
+
+            #im = im / high
+
+            plt.imshow(im)
+            plt.show()
+            return im
+
         image_idx = idx // self.sample_per_image
         batch_x = self.x[image_idx * self.batch_size:(image_idx + 1) *
         self.batch_size]
@@ -121,6 +143,9 @@ class AZSequence(Sequence):
 
         random_subsample = self.get_random_crop((2154, 2554), config.sample_crop[:2])
 
+        def magnification_level(path):
+            return os.path.basename(os.path.dirname(path))
+
 
         if not self.random_subsample_input:
             random_subsample = None
@@ -136,25 +161,35 @@ class AZSequence(Sequence):
         import pprint
         pp = pprint.PrettyPrinter(indent=4)
 
-        #print('..............')
-        #pp.pprint(batch_x)
-
         for batch_elem in batch_x:
-            image = self.read_stack(batch_elem, self.train, True, random_subsample)
+            mag_level = magnification_level(batch_elem[0])
+            image = self.read_stack(batch_elem, self.train, random_subsample)
             image = np.transpose(image, (1, 2, 0))
+            
+            # Normalize to [0. 1.]
+            for z in range(len(batch_elem)):
+                print('Image:', batch_elem[z])
+                image[..., z] = normalize(image[..., z], norm[mag_level]['low'][3], norm[mag_level]['high'][3])
+                imageio.imwrite('l/%d-%d.png' % (z, idx), (image[..., z]*255).astype(np.uint8))
             if config.augment and self.train:
                 image = self.augment(image, rotate_angle, fliplr_tf, flipud_tf)
             batch_x_images.append(image)
-            #print('Batch X shape:', np.shape(image))
 
         for batch_elem in batch_y:
-            image = self.read_stack(batch_elem, self.train, True, random_subsample)
+            mag_level = magnification_level(batch_elem[0])
+            image = self.read_stack(batch_elem, self.train, random_subsample)
             image = np.transpose(image, (1, 2, 0))
+
+            # Normalize to [0. 1.]
+            for ch in range(len(batch_elem)):
+                print('Image:', batch_elem[ch])
+                image[..., ch] = normalize(image[..., ch], norm[mag_level]['low'][ch], norm[mag_level]['high'][ch])
+
+            imageio.imwrite('l/%d-%d.png' % (z, idx), (image*255).astype(np.uint8))
 
             if config.augment and self.train:
                 image = self.augment(image, rotate_angle, fliplr_tf, flipud_tf)
             batch_y_images.append(image)
-            #print('Batch y shape:', np.shape(image))
 
         return np.array(batch_x_images), np.array(batch_y_images)
 
@@ -168,7 +203,7 @@ def get_images_list(data_dir):
         label_paths_ = []
         magnifications = ['20x', '40x', '60x']
 
-        magnifications = [magnifications[0]]
+        magnifications = [magnifications[2]]
 
         for magnification in magnifications:
             glob_im = '%s/%s/*A04*' % (data_dir, magnification)
@@ -184,7 +219,7 @@ def info(im_name):
     im_bname = os.path.basename(im_name)
     experiment = im_bname[:len('AssayPlate_Greiner_#655090')]
     well = im_bname[len('AssayPlate_Greiner_#655090_'):len('AssayPlate_Greiner_#655090_')+3]
-    field = im_bname[len('AssayPlate_Greiner_#655090_D04_T0001F'):len('AssayPlate_Greiner_#655090_D04_T0001F')+3]
+    field = im_bname[len('AssayPlate_Greiner_#655090_D04_T0001'):len('AssayPlate_Greiner_#655090_D04_T0001')+4]
 
     return experiment, well, field
 
@@ -271,7 +306,6 @@ def get_dataset(data_dir, train_, sample_per_image=60, random_subsample_input=Tr
     return AZSequence(
         x, y, batch_size=1, sample_per_image=sample_per_image, train_=train_, 
         random_subsample_input=random_subsample_input, resetseed=resetseed, seed=seed)
-
 
 def visualize(original, augmented):
     fig = plt.figure()
@@ -448,10 +482,23 @@ if __name__ == '__main__':
         os.makedirs(config.output_dir, exist_ok=True)
 
     # Leave out wells for validation
-    lo_ws = ['B03']
+    lo_ws = ['F001']
 
-    train_sequence = get_dataset(config.data_dir, train_=True, sample_per_image=20, random_subsample_input=True, seed=config.seed, filter_fun=lambda im: info(im)[1] not in lo_ws)
-    val_sequence = get_dataset(config.data_dir, train_=False, sample_per_image=8, random_subsample_input=True, seed=config.seed, resetseed=True, filter_fun=lambda im: info(im)[1] in lo_ws)
+    train_sequence = get_dataset(
+        config.data_dir, 
+        train_=True, 
+        sample_per_image=20, 
+        random_subsample_input=True, 
+        seed=config.seed, 
+        filter_fun=lambda im: info(im)[2] not in lo_ws)
+    val_sequence = get_dataset(
+        config.data_dir, 
+        train_=False, 
+        sample_per_image=8, 
+        random_subsample_input=True, 
+        seed=config.seed, 
+        resetseed=True,
+         filter_fun=lambda im: info(im)[2] in lo_ws)
 
     #test_sequence = get_dataset(config.data_dir, train_=False, sample_per_image=1, random_subsample_input=False)
 
@@ -466,4 +513,4 @@ if __name__ == '__main__':
 
     
     #test(test_sequence, model, tile_sizes=tuple(config.sample_crop[:2]), save=config.save)
-    #test(train_sequence)
+    test(train_sequence)
