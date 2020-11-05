@@ -3,6 +3,12 @@ from datetime import datetime
 
 seed = 42
 
+magnifications = ['20x', '40x', '60x']
+
+train_samples_per_image = 20
+val_samples_per_image = 10
+epochs = 1
+
 # Will be set by the init script
 data_dir = None
 
@@ -38,5 +44,5 @@ readonly = False
 # Wether to save the predicted images or not.
 save = True
 
-# Whether to run the code on the local computer, or use the dgx8 format...
-local_run = True
+# The file to export the min and max values of images
+limits_file = 'x-limits-%s.json'

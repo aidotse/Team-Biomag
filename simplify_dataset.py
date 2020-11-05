@@ -7,38 +7,27 @@ import imageio
 import numpy as np
 import pprint
 import json
+from statistics import median_low, median_high
 
 import config
+import init
 
 pp = pprint.PrettyPrinter(indent=4)
 
-if __name__ == '__main__':
-    def get_med_ch(low, high):
-        low_med = {}
-        high_med = {}
-        for ch in range(4):
-            low[ch].sort()
-            high[ch].sort()
-            low_med[ch] = low[ch][len(low[ch])//2]
-            high_med[ch] = high[ch][len(high[ch])//2]
+def equalize(ch, lo, hi):
+    ch[ch>hi] = hi
+    ch[ch<lo] = lo
 
-        return low_med, high_med
+    ch = ch - lo
+    ch = ch / (hi-lo)
     
-    def equalize(ch, lo, hi):
-        ch[ch>hi] = hi
-        ch[ch<lo] = lo
-    
-        ch = ch - lo
-        ch = ch / (hi-lo)
-        
-        ch = ch*255
-        ch = ch.astype(np.uint8)
-        return ch
+    ch = ch*255
+    ch = ch.astype(np.uint8)
+    return ch
 
-
-    data_folder = '/home/ervin/Dokumentumok/brc/Adipocyte/sample'
-    data_folder = '/media/ervin/SSD-Data/adipocyte/data'
-    out_path = 'out'
+def simplify(only_measure=True):
+    data_folder = config.data_dir
+    out_path = '.'
 
     """
     Example image name:
@@ -51,9 +40,10 @@ if __name__ == '__main__':
 
     ims = defaultdict(list)
 
-    magnifications = ['60x']
-    for magnification in magnifications:
-        os.makedirs('%s/%s' % (out_path, magnification), exist_ok=True)
+    out = {}
+
+    magnifications = ['20x', '40x', '60x']
+    for magnification in [magnifications[2]]:
         data_path = os.path.join(data_folder, magnification)
         for im in os.listdir(data_path):
             k = im[:len('AssayPlate_Greiner_#655090_D04_T0001F006')]
@@ -63,73 +53,119 @@ if __name__ == '__main__':
             ims[k].sort()
         
         # Intensity minimums and maximums for each channel for each image
-        low = defaultdict(list)
-        high = defaultdict(list)
+        lows = defaultdict(list)
+        highs = defaultdict(list)
+        mins = defaultdict(list)
+        maxs = defaultdict(list)
 
         print('Computing histo limit stats on the mag level: %s' % magnification)
-        for idx, k in enumerate(ims.keys()):
+        for idx, im_key in enumerate(ims.keys()):
             merged = []
-            for ch_id, im in enumerate(ims[k][:3]):
-                im_path = os.path.join(data_folder, magnification, im)
-                ch = imageio.imread(im_path)
-                
-                sort_ch = np.sort(np.reshape(ch, (-1,)))
+            # Process fluos
+            for ch_id, fluo_filename in enumerate(ims[im_key][:3]):
+                n, _a, _b, pad = 0, 0, 0, 0
+                sort_ch = None
+                fluo_path = None
+                fluo_im = None
+
+                ####
+
+                fluo_path = os.path.join(data_folder, magnification, fluo_filename)
+                fluo_im = imageio.imread(fluo_path)
+
+                sort_ch = np.sort(np.reshape(fluo_im, (-1,)))
                 n = len(sort_ch)
                 pad = round(n/tol)
-                a = sort_ch[pad]
-                b = sort_ch[-pad]
 
-                low[ch_id].append(a)
-                high[ch_id].append(b)
-                print(im_path, a, b)
+                _a, _b = sort_ch[pad], sort_ch[-pad]
 
-            for b in ims[k][3:]:
-                im_path = os.path.join(data_folder, magnification, b)
-                b_im = imageio.imread(im_path)
+                lows[ch_id].append(_a)
+                highs[ch_id].append(_b)
+                mins[ch_id].append(sort_ch[0])
+                maxs[ch_id].append(sort_ch[-1])
+                print('im: %s low: %s high: %s min: %s max: %s' % (fluo_path, _a, _b, sort_ch[0], sort_ch[-1]))
 
-                sort_ch = np.sort(np.reshape(b_im, (-1,)))
+            # Process brightfields
+            for bright_filename in ims[im_key][3:]:
+                n, _a, _b, pad = 0, 0, 0, 0
+                sort_ch = None
+                bright_path = None
+                bright_im = None
+
+                ####
+
+                bright_path = os.path.join(data_folder, magnification, bright_filename)
+                bright_im = imageio.imread(bright_path)
+
+                sort_ch = np.sort(np.reshape(bright_im, (-1,)))
+
                 n = len(sort_ch)
                 pad = round(n/tol)
-                a = sort_ch[pad]
-                b = sort_ch[-pad]
+
+                _a, _b = sort_ch[pad], sort_ch[-pad]
 
                 ch_id = 3
-                low[ch_id].append(a)
-                high[ch_id].append(b)
-                print(im_path, a, b)
-        low_med, high_med = get_med_ch(low, high)
-        print('Computed histo stretch limit (med) for each channel:', low_med, high_med)
+                lows[ch_id].append(_a)
+                highs[ch_id].append(_b)
+                mins[ch_id].append(sort_ch[0])
+                maxs[ch_id].append(sort_ch[-1])
+                print('im: %s mag: %s low: %s high: %s min: %s max: %s' % (bright_path, magnification, _a, _b, sort_ch[0], sort_ch[-1]))
 
-        limits = {'low': low_med, 'high': high_med}
+        channels = list(range(4))
 
-        with open(os.path.join(out_path, 'limits-%s.json' % magnification), 'w') as outfile:
-            outfile.write(str(limits))
+        ch_ids = None
 
-        print('Exporting dataset')
-        for idx, k in enumerate(ims.keys()):
-            print('Fluo channels:')
-            merged = []
-            for ch_id, im in enumerate(ims[k][:3]):
-                ch = imageio.imread(os.path.join(data_folder, magnification, im))
+        for ch_ids in channels:
+            lows[ch_ids].sort()
+            highs[ch_ids].sort()
 
-                lo = low_med[ch_id]
-                hi = high_med[ch_id]
+            print('LOWS', ch_ids, lows[ch_ids])
+            print('HIGHS', ch_ids, highs[ch_ids])
 
-                ch = equalize(ch, lo, hi)
+        ch_id = None
+        limits = {
+            'low': [int(median_low(lows[ch_id])) for ch_id in channels], 
+            'high': [int(median_high(highs[ch_id])) for ch_id in channels]}
+
+        minmax = {
+            'min': [int(min(mins[ch_id])) for ch_id in channels], 
+            'max': [int(max(maxs[ch_id])) for ch_id in channels]}
+
+        print(limits, minmax)
+
+        with open(os.path.join(out_path, config.limits_file % magnification), 'w') as outfile:
+            json.dump(limits, outfile)
+
+        if only_measure == False:
+            print('Exporting dataset')
+            for idx, k in enumerate(ims.keys()):
+                print('Fluo channels:')
+                merged = []
+                for ch_id, im in enumerate(ims[k][:3]):
+                    fluo_im = imageio.imread(os.path.join(data_folder, magnification, im))
+
+                    lo = low_med[ch_id]
+                    hi = high_med[ch_id]
+
+                    fluo_im = equalize(fluo_im, lo, hi)
+                    
+                    merged.append(fluo_im)
+
+                merged = np.array(merged).astype(np.uint8)
+                merged = np.transpose(merged, (1, 2, 0))
+
+                imageio.imwrite('%s/%s/%s.png' % (out_path, magnification, os.path.splitext(ims[k][0])[0]), merged)
                 
-                merged.append(ch)
+                pp.pprint(ims[k][:3])
+                print('Bright channels:')
+                pp.pprint(ims[k][3:])
 
-            merged = np.array(merged).astype(np.uint8)
-            merged = np.transpose(merged, (1, 2, 0))
+                ch_id = 3
+                for b in ims[k][3:]:
+                    b_im = imageio.imread(os.path.join(data_folder, magnification, b))
+                    b_im = equalize(b_im, low_med[ch_id], high_med[ch_id])
+                    imageio.imwrite('%s/%s/%s.png' % (out_path, magnification, b[:-4]), b_im)
 
-            imageio.imwrite('%s/%s/%s.png' % (out_path, magnification, os.path.splitext(ims[k][0])[0]), merged)
-            
-            pp.pprint(ims[k][:3])
-            print('Bright channels:')
-            pp.pprint(ims[k][3:])
 
-            ch_id = 3
-            for b in ims[k][3:]:
-                b_im = imageio.imread(os.path.join(data_folder, magnification, b))
-                b_im = equalize(b_im, low_med[ch_id], high_med[ch_id])
-                imageio.imwrite('%s/%s/%s.png' % (out_path, magnification, b[:-4]), b_im)
+if __name__ == '__main__':
+    simplify()
