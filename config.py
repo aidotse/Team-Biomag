@@ -46,3 +46,8 @@ save = True
 
 # The file to export the min and max values of images
 limits_file = 'x-limits-%s.json'
+
+# weights' path for saving the U_CP network, and path to the output of CP pipeline. Set by init.
+n_features = 99
+u_cp_weights_path = None
+feature_file_path = None

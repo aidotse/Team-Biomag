@@ -38,6 +38,9 @@ def normalize(im, low, high, histo = True):
 
     return im
 
+def denormalize(im, low, high):
+    return im*(high-low)+low
+
 
 class AZSequence(Sequence):
 

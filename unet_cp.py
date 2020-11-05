@@ -73,12 +73,9 @@ def get_cp_dataset(im_dir, feature_file, train_, seed=None, filter_fun=None, use
         return im_id
 
     def get_res(im_path):
-        if config.local_run:
-            return os.path.basename(
-                os.path.dirname(os.path.dirname(im_path)))[:3]
-        else:
-            return os.path.basename(
-                    os.path.dirname(im_path))[:3]
+        return os.path.basename(
+            os.path.dirname(os.path.dirname(im_path)))[:3]
+
 
     def get_crop_id(im_path):
         crop_id = im_path[-6:-4]
@@ -131,12 +128,9 @@ def get_u_cp_dataset(im_dir, feature_file, train_, seed=None, filter_fun=None, u
         return im_id
 
     def get_res(im_path):
-        if config.local_run:
-            return os.path.basename(
-                os.path.dirname(os.path.dirname(im_path)))[:3]
-        else:
-            return os.path.basename(
-                os.path.dirname(im_path))[:3]
+        return os.path.basename(
+            os.path.dirname(os.path.dirname(im_path)))[:3]
+
 
     def get_crop_id(im_path):
         crop_id = im_path[-6:-4]
@@ -163,9 +157,6 @@ def get_u_cp_dataset(im_dir, feature_file, train_, seed=None, filter_fun=None, u
 
 
 # params
-weight_file = "cp_weights.h5"
-feature_file = r"Y:\BIOMAG\Adipocytes\features\20x_crop512\features\Adipocytes_Image.csv"
-n_features = 99
 cp_input_shape = (config.sample_crop[0], config.sample_crop[1], 3)
 
 # data
@@ -176,20 +167,20 @@ lo_ws = ['B03']
 # val_sequence = get_cp_dataset(config.data_dir, train_=False, sample_per_image=8, random_subsample_input=True, seed=config.seed, resetseed=True, filter_fun=lambda im: info(im)[1] in lo_ws)
 
 # training CP feature predictor
-train_sequence = get_cp_dataset(config.data_dir, feature_file, True, config.seed, use_crop_id=True)
+train_sequence = get_cp_dataset(config.data_dir, config.feature_file_path, True, config.seed, use_crop_id=True)
 cp_input = Input(shape=cp_input_shape)
-cp_net = CP(n_features=n_features, input_shape=cp_input_shape)(cp_input)
+cp_net = CP(n_features=config.n_features, input_shape=cp_input_shape)(cp_input)
 cp_net = Model(cp_input, cp_net)
 cp_net.summary(line_length=120)
 cp_net.compile("adam", "mse", ["mse", "mae"])
-# cp_net.fit(train_sequence, epochs=5)
-cp_net.save_weights(weight_file)
+cp_net.fit(train_sequence, epochs=20)
+cp_net.save_weights(config.u_cp_weights_path)
 
 
-train_sequence = get_u_cp_dataset(config.data_dir, feature_file, True, config.seed, use_crop_id=True)
-train_sequence[0]
-model = U_CP(config.net_input_shape, n_features)
+train_sequence = get_u_cp_dataset(config.data_dir, config.feature_file_path, True, config.seed, use_crop_id=True)
+
+model = U_CP(config.net_input_shape, config.n_features)
 model.compile("adam", "mse", ["mse", "mae"])
-model.load_weights(weight_file, True)
+model.load_weights(config.u_cp_weights_path, True)
 model.summary(line_length=120)
 model.fit(train_sequence, epochs=5)
