@@ -1,7 +1,6 @@
 import sys
 import os
 import math
-import json
 from random import Random
 from glob import glob
 from collections import defaultdict
@@ -15,12 +14,13 @@ from skimage import transform
 import config
 import init
 
+import misc
+
 def load_limits():
     print('Loading limits statistics to scale the intensities.')
     norm = {}
     for magnification in config.magnifications:
-        with open(config.limits_file % magnification) as limitsfile:
-            norm[magnification] = json.load(limitsfile)
+        norm[magnification] = misc.get_json(config.limits_file % magnification)
 
     return norm
 
@@ -58,6 +58,7 @@ class AZSequence(Sequence):
         self.train = train_
         self.random_subsample_input = random_subsample_input
         self.norm = load_limits()
+        self.return_meta = False
 
     def __len__(self):
         return math.ceil(len(self.x)*self.sample_per_image / self.batch_size)
@@ -145,9 +146,6 @@ class AZSequence(Sequence):
 
         random_subsample = self.get_random_crop((2154, 2554), config.sample_crop[:2])
 
-        def magnification_level(path):
-            return os.path.basename(os.path.dirname(path))
-
 
         if not self.random_subsample_input:
             random_subsample = None
@@ -164,7 +162,7 @@ class AZSequence(Sequence):
         pp = pprint.PrettyPrinter(indent=4)
 
         for batch_elem in batch_x:
-            mag_level = magnification_level(batch_elem[0])
+            mag_level = misc.magnification_level(batch_elem[0])
             image = self.read_stack(batch_elem, self.train, random_subsample)
             image = np.transpose(image, (1, 2, 0))
             
@@ -179,7 +177,7 @@ class AZSequence(Sequence):
             batch_x_images.append(image)
 
         for batch_elem in batch_y:
-            mag_level = magnification_level(batch_elem[0])
+            mag_level = misc.magnification_level(batch_elem[0])
             image = self.read_stack(batch_elem, self.train, random_subsample)
             image = np.transpose(image, (1, 2, 0))
 
@@ -199,7 +197,10 @@ class AZSequence(Sequence):
                 image = self.augment(image, rotate_angle, fliplr_tf, flipud_tf)
             batch_y_images.append(image)
 
-        return np.array(batch_x_images), np.array(batch_y_images)
+        if self.return_meta:
+            return np.array(batch_x_images), np.array(batch_y_images), batch_x
+        else:
+            return np.array(batch_x_images), np.array(batch_y_images)
 
 
 def get_images_list(data_dir, magnifications):
@@ -224,7 +225,7 @@ def info(im_name):
 
     return experiment, well, field
 
-def get_dataset(data_dir, train_, sample_per_image=60, random_subsample_input=True, seed=None, resetseed=None, filter_fun=None):    
+def get_dataset(data_dir, train_, sample_per_image=60, random_subsample_input=True, seed=None, resetseed=None, filter_fun=None):
     print('Magnifications to use: %s' % config.magnifications)
     image_paths_, label_paths_ = get_images_list(data_dir, config.magnifications)
     print('Number of image files discovered:', len(image_paths_))

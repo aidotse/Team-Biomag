@@ -51,3 +51,5 @@ limits_file = 'x-limits-%s.json'
 n_features = 99
 u_cp_weights_path = None
 feature_file_path = None
+
+initial_epoch = 1

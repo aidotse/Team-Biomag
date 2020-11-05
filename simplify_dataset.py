@@ -6,11 +6,12 @@ import matplotlib.pyplot as plt
 import imageio
 import numpy as np
 import pprint
-import json
 from statistics import median_low, median_high
 
 import config
 import init
+
+import misc
 
 pp = pprint.PrettyPrinter(indent=4)
 
@@ -133,8 +134,7 @@ def simplify(only_measure=True):
 
         print(limits, minmax)
 
-        with open(os.path.join(out_path, config.limits_file % magnification), 'w') as outfile:
-            json.dump(limits, outfile)
+        misc.put_json(out_path, config.limits_file % magnification, limits)
 
         if only_measure == False:
             print('Exporting dataset')
