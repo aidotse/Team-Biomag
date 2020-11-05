@@ -109,7 +109,6 @@ def train(sequences, model):
     return model
 
 def predict_tiled(x, y_channels, tile_sizes):
-    print(np.shape(x))
     ys, xs = np.shape(x)[1], np.shape(x)[2]
     (y_src, y_src_crop, y_target), (x_src, x_src_crop, x_target) = tiled_copy.get_tiles(ys, tile_sizes[0]), tiled_copy.get_tiles(xs, tile_sizes[1])
     y_shape = np.shape(x)[:3] + (y_channels,)
@@ -145,7 +144,6 @@ def test(sequence, model=None, save=False, tile_sizes=None):
             if tile_sizes is not None:
                 y_pred = predict_tiled(x, 3, tile_sizes)
             else:
-                print(np.shape(x))
                 y_pred = model.predict(x)
                 plt.imshow(x[0, ..., 3])
                 plt.show()
@@ -181,7 +179,7 @@ def test(sequence, model=None, save=False, tile_sizes=None):
         plt.subplot(plot_layout + 4, title='GT Fluorescent (blue)')
         plt.imshow(y_im[..., 2])
 
-        plt.show()
+        #plt.show()
         #plt.savefig('%d.png' % idx)
 
         if save and False:
@@ -230,5 +228,5 @@ if __name__ == '__main__':
     if config.train == True:
         model = train((train_sequence, val_sequence), model)
     
-    test(train_sequence, model)
+    test(val_sequence, model)
     #test(train_sequence)
