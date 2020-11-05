@@ -46,3 +46,6 @@ save = True
 
 # The file to export the min and max values of images
 limits_file = 'x-limits-%s.json'
+
+
+initial_epoch = 1
