@@ -1,4 +1,5 @@
 import os
+from statistics import mean
 
 import numpy as np
 import tensorflow as tf
@@ -14,6 +15,7 @@ import init
 import dataset
 import stardist_blocks as sd
 import tiled_copy
+import misc
 
 def visualize(original, augmented):
     fig = plt.figure()
@@ -130,7 +132,11 @@ def test(sequence, model=None, save=False, tile_sizes=None):
     """
     If the model is set, it predicts the image using the model passed and shows the result.
     """
-    for idx, (x, y) in enumerate(sequence):
+    sequence.return_meta = True
+    mse_per_image = {}
+    mse_all = {mag: {i: [] for i in range(3)} for mag in config.magnifications}
+
+    for idx, (x, y, meta) in enumerate(sequence):
         batch_element = 0
         plot_layout = 140
 
@@ -145,11 +151,8 @@ def test(sequence, model=None, save=False, tile_sizes=None):
                 y_pred = predict_tiled(x, 3, tile_sizes)
             else:
                 y_pred = model.predict(x)
-                plt.imshow(x[0, ..., 3])
-                plt.show()
                 for ch in range(3):
-                    plt.imshow(y_pred[0, ..., ch])
-                    plt.show()
+                    plt.imshow(y_pred[batch_element, ..., ch])
             
             y_pred_sample = y_pred[batch_element]
 
@@ -163,9 +166,63 @@ def test(sequence, model=None, save=False, tile_sizes=None):
             plt.imshow(y_pred_sample[..., 2])
 
             if save and not config.readonly:
-                imageio.imwrite(os.path.join(config.output_dir, '%d_bright.tif' % idx), x_im)
-                imageio.imwrite(os.path.join(config.output_dir, '%d_true.tif' % idx), y_sample)
-                imageio.imwrite(os.path.join(config.output_dir, '%d_pred.tif' % idx), y_pred_sample)
+                magnification = misc.magnification_level(meta[batch_element][0])
+                filename = os.path.basename(meta[batch_element][0])
+                print('Predicted filename: %s, mag: %s' % (filename, magnification))
+                # AssayPlate_Greiner_#655090_D04_T0001F012L01A04Z07C04.tif
+                # AssayPlate_Greiner_#655090_D04_T0001F012L01   [len_stem]
+                # {ACTION}
+                # Z07                                           [len_stem+3:len_stem+6]
+                # {CHANNEL}
+                # .tif                                          [len_stem+9:]
+                im_id = filename[:len('AssayPlate_Greiner_#655090_D04_T0001F012')]
+                len_stem = len('AssayPlate_Greiner_#655090_D04_T0001F012L01')
+                filename = list(filename)
+                out_filename_pattern = \
+                    filename[:len_stem] + ['A%.2d'] + filename[len_stem+3:len_stem+6] + ['C%.2d'] + filename[len_stem+9:]
+                out_filename_pattern = ''.join(out_filename_pattern)
+                print(out_filename_pattern)
+                
+                # Save visualization results
+                vis_subdir = os.path.join(config.output_dir, 'visual', magnification)
+
+                os.makedirs(os.path.join(vis_subdir), exist_ok=True)
+
+                imageio.imwrite(
+                    os.path.join(vis_subdir, im_id + '_bright.tif'), x_im)
+
+                imageio.imwrite(
+                    os.path.join(vis_subdir, im_id + '_true.tif'), y_sample)
+                
+                imageio.imwrite(
+                    os.path.join(vis_subdir, im_id + '_out.tif'), y_pred_sample)
+                
+                imageio.imwrite(
+                    os.path.join(vis_subdir, im_id + '_out.tif'), y_pred_sample)
+
+                diff = (y_sample-y_pred_sample)**2
+                imageio.imwrite(
+                    os.path.join(vis_subdir, im_id + '_diff.tif'), diff)
+
+                mse = np.sum(diff)/np.size(diff)
+                stat_key = '%s/%s/%s'
+                mse_per_image[stat_key % (magnification, im_id, 'all')] = mse
+
+                for ch_id in range(3):
+                    diff_ch = (y_sample[..., ch_id]-y_pred_sample[..., ch_id])**2
+                    mse_ch = np.sum(diff_ch)/np.size(diff_ch)
+                    mse_per_image[stat_key % (magnification, im_id, str(ch_id))] = mse_ch
+                    mse_all[magnification][ch_id].append(mse_ch)
+
+                # Save raw results
+
+                """
+                result_subdir = os.path.join(config.output_dir, 'results', magnification)
+                os.makedirs(os.path.join(config.output_dir, result_subdir), exist_ok=True)
+
+                for channel_id in range(3):
+                    imageio.imwrite(os.path.join(result_subdir, out_filename_pattern % (channel_id+1, channel_id+1)), y_pred_sample[..., channel_id])
+                """
 
         plt.subplot(plot_layout + 1, title='Input Brightfield@Z=%d' % z_pos)
         plt.imshow(x_im)
@@ -194,6 +251,13 @@ def test(sequence, model=None, save=False, tile_sizes=None):
             imageio.volwrite('%s/true-%d.tif' % (config.output_dir, idx), y_im)
             imageio.volwrite('%s/input-%d.tif' % (config.output_dir, idx), np.transpose(x_sample, (2, 0, 1)))
 
+    final_result = {mag: {ch: mean(mse_all[mag][ch]) for ch in range(3)} for mag in config.magnifications}
+
+    misc.put_json(os.path.join(config.output_dir, 'mse_per_image.json'), mse_per_image)
+    misc.put_json(os.path.join(config.output_dir, 'mse_final.json'), final_result)
+    misc.put_json(os.path.join(config.output_dir, 'mse_all.json'), mse_all)
+
+    sequence.return_meta = False
 
 if __name__ == '__main__':
     # Leave out wells for validation
@@ -211,7 +275,7 @@ if __name__ == '__main__':
         config.data_dir, 
         train_=False, 
         sample_per_image=config.val_samples_per_image, 
-        random_subsample_input=True, 
+        random_subsample_input=False, 
         seed=config.seed, 
         resetseed=True,
          filter_fun=lambda im: dataset.info(im)[1] in lo_ws)
@@ -228,5 +292,5 @@ if __name__ == '__main__':
     if config.train == True:
         model = train((train_sequence, val_sequence), model)
     
-    test(val_sequence, model)
+    test(val_sequence, model, save=True, tile_sizes=(512, 512))
     #test(train_sequence)
