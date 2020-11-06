@@ -32,14 +32,33 @@ import shutil
 # folder = "/home/koosk/data/images/adipocyte/dataset/60x-tiles-renamed/Z01C01"
 # folder = "/home/koosk/data/images/adipocyte/dataset/60x-tiles-renamed/Z01C02"
 # folder = "/home/koosk/data/images/adipocyte/dataset/60x-tiles-renamed/Z01C03"
-# folder = "/home/koosk/data/images/adipocyte/dataset/60x-tiles-renamed/RGB"
+folder = "/home/koosk/data/images/adipocyte/dataset/60x-tiles-renamed/RGB"
 # folder = "/home/koosk/data/images/adipocyte/dataset/60x-tiles-renamed/Z01C04"
 # folder = "/home/koosk/data/images/adipocyte/dataset/60x-tiles-renamed/Z02C04"
 # folder = "/home/koosk/data/images/adipocyte/dataset/60x-tiles-renamed/Z03C04"
 # folder = "/home/koosk/data/images/adipocyte/dataset/60x-tiles-renamed/Z04C04"
 # folder = "/home/koosk/data/images/adipocyte/dataset/60x-tiles-renamed/Z05C04"
 # folder = "/home/koosk/data/images/adipocyte/dataset/60x-tiles-renamed/Z06C04"
-folder = "/home/koosk/data/images/adipocyte/dataset/60x-tiles-renamed/Z07C04"
+# folder = "/home/koosk/data/images/adipocyte/dataset/60x-tiles-renamed/Z07C04"
+# folder = "/home/koosk/data/images/adipocyte/nuclei_CP_mask-20x-tiled"
+# folder = "/home/koosk/data/images/adipocyte/nuclei_CP_mask-40x-tiled"
+# folder = "/home/koosk/data/images/adipocyte/nuclei_CP_mask-60x-tiled"
+# folder = "/home/koosk/data/images/adipocyte/dataset/20x-tiles-renamed/RGB"
+# folder = "/home/koosk/data/images/adipocyte/dataset/20x-tiles-renamed/Z01C01"
+# folder = "/home/koosk/data/images/adipocyte/dataset/20x-tiles-renamed/Z01C02"
+# folder = "/home/koosk/data/images/adipocyte/dataset/20x-tiles-renamed/Z01C03"
+# folder = "/home/koosk/data/images/adipocyte/dataset/20x-tiles-renamed/Z01C04"
+# folder = "/home/koosk/data/images/adipocyte/dataset/20x-tiles-renamed/Z02C04"
+# folder = "/home/koosk/data/images/adipocyte/dataset/20x-tiles-renamed/Z03C04"
+# folder = "/home/koosk/data/images/adipocyte/dataset/20x-tiles-renamed/Z04C04"
+# folder = "/home/koosk/data/images/adipocyte/dataset/20x-tiles-renamed/Z05C04"
+# folder = "/home/koosk/data/images/adipocyte/dataset/20x-tiles-renamed/Z06C04"
+# folder = "/home/koosk/data/images/adipocyte/dataset/20x-tiles-renamed/Z07C04"
+
+# folder = "/home/koosk/data/images/adipocyte/nuclei_CP_mask-20x-tiled"
+# folder = "/home/koosk/data/images/adipocyte/dataset/20x-tiles-renamed/RGB"
+# folder = "/home/koosk/data/tmp/p2p/mask"
+# folder = "/home/koosk/data/tmp/p2p/RGB"
 
 random_state = 2475
 train_ratio = 0.7
@@ -48,6 +67,7 @@ test_ratio = 0.10
 
 
 onlyfiles = [f for f in listdir(folder) if isfile(join(folder, f))]
+onlyfiles.sort()
 
 indices = range(len(onlyfiles))
 x_train, x_test, y_train, y_test = train_test_split(indices, indices, test_size=1 - train_ratio, random_state=random_state)
@@ -77,6 +97,7 @@ for idx in range(len(onlyfiles)):
         dst = train_folder
     elif idx in x_val:
         dst = val_folder
+        # print(onlyfiles[idx])
     else:
         dst = test_folder
 
