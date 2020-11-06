@@ -4,6 +4,7 @@ from datetime import datetime
 seed = 42
 
 magnifications = ['20x', '40x', '60x']
+wells = ['B03', 'B04', 'C02', 'C03', 'C04', 'D02', 'D03', 'D04']
 
 train_samples_per_image = 20
 val_samples_per_image = 10

@@ -34,7 +34,7 @@ class BaseGenerator(Sequence):
         return len(self.indices) + (self.last_batch is not None)
 
     def get_indices(self, index):
-        return self.indices[index] if self.last_batch is None else self.last_batch
+        return self.last_batch if index == len(self)-1 and self.last_batch is not None else self.indices[index]
 
     def __getitem__(self, index):
         return self.get_indices(index)
@@ -196,25 +196,35 @@ class AugmentationGenerator(BaseGenerator):
 
 class CPSequence(AugmentationGenerator):
 
-    def __init__(self, X, y, batch_size, train_=True, seed=None, shuffle=True, transform=True):
+    def __init__(self, X, y, batch_size, standardize=False, seed=None, shuffle=True, transform=True, used_wells=None):
         self.rand_instance = Random()
         cols = np.genfromtxt(y, np.str, delimiter=",", max_rows=1)
-        y = np.loadtxt(y, delimiter=",", usecols=[i for i in range(len(cols))
+
+
+        features = np.loadtxt(y, delimiter=",", usecols=[i for i in range(len(cols))
                                                        if cols[i] != "ImageNumber"
                                                        and not cols[i].startswith("Metadata")], skiprows=1)
-        y = (y-y.mean(axis=0, keepdims=True))/y.std(axis=0, keepdims=True)
-        self.train = train_
+        if used_wells is not None:
+            wells = np.loadtxt(y, np.str, delimiter=",", usecols=np.squeeze(np.argwhere(cols=="Metadata_Well")), skiprows=1)
+            features = features[np.isin(wells, used_wells)]
+        self.standardize_params = None
+        if standardize is True:
+            self.standardize_params = features.mean(axis=0, keepdims=True), features.std(axis=0, keepdims=True)
+            features = (features-self.standardize_params[0])/self.standardize_params[1]
+        elif standardize:
+            self.standardize_params = standardize[0], standardize[1]
+            features = (features-standardize[0])/standardize[1]
 
-        super().__init__(np.asarray(X).reshape(-1, 3), y, batch_size,
+        super().__init__(np.asarray(X).reshape(-1, 3), features, batch_size,
                          rotate=transform, flip_ud=transform, flip_lr=transform,
                          shuffle=shuffle, random_seed=seed)
         self.preprocess_x = lambda batch_x: np.concatenate(
-            list(map(lambda p: np.expand_dims(np.transpose(self.read_stack(p, self.train, True),
+            list(map(lambda p: np.expand_dims(np.transpose(self.read_stack(p, True),
                                                            (1, 2, 0)), 0),
                      batch_x)), axis=0)
 
     @staticmethod
-    def read_stack(slice_paths, train_, normalize=False, random_subsample=None):
+    def read_stack(slice_paths, normalize=False, random_subsample=None):
         # The same x-y crop will be applied to each brightflield slice and even on the fluo targets.
         for idx, im_path in enumerate(slice_paths):
             slice_ = imageio.imread(im_path).astype(np.float32)
@@ -250,8 +260,8 @@ class CPSequence(AugmentationGenerator):
 
 class U_CPSequence(CPSequence):
 
-    def __init__(self, X, y, f, batch_size, train_=True, seed=None, shuffle=True, transform=True):
-        super().__init__(y, f, batch_size, train_, seed, shuffle, transform)
+    def __init__(self, X, y, f, batch_size, standardize=False, seed=None, shuffle=True, transform=True, used_wells=None):
+        super().__init__(y, f, batch_size, standardize, seed, shuffle, transform, used_wells)
         self.br = np.asarray(X).reshape(-1, 7)
 
     def __getitem__(self, index):
