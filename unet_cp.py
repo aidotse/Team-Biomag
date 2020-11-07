@@ -27,7 +27,7 @@ def CP(input_shape, n_features):
     """
     def cp_net(input):
         resnet = ResNet50V2(False, None, input_tensor=input, input_shape=input_shape, pooling="avg")
-        out = Dense(n_features)(resnet.output)
+        out = Dense(n_features, name="CP_features")(resnet.output)
         return out
 
     return cp_net
@@ -53,18 +53,18 @@ def filter_fun(wells):
     return lambda im: dataset.info(im)[1] in wells
 
 
-def get_cp_dataset(im_dir, feature_file, standardize=False, seed=None, wells=None, use_crop_id=False):
-    '''
+def get_cp_dataset(im_dir, feature_file, norm_med=False, seed=None, wells=None, use_crop_id=False):
+    """
 
     :param im_dir: folder containing the input images
     :param feature_file: output .csv file from CP
-    :param standardize: True if input should be standardized, a tuple with (mean, std) to standardize with, or False if
-                        no standardization is needed
+    :param norm_med: True if input should be normalized (division by median), median to divide features with, or False if
+                        no normalization is needed
     :param seed: random seed for the generator
     :param wells: wells to include from the dataset
     :param use_crop_id: True if input images have crop ids on the end of the files ("like '..._xx.tif')
     :return: CPSequence instance (generator)
-    '''
+    """
     fluor_paths_ = os.listdir(im_dir)
     fluor_paths_ = filter(lambda p: p[-10:-7] in ["C%.2d" % i for i in range(1, 4)], fluor_paths_) if use_crop_id\
         else filter(lambda p: p[-7:-4] in ["C%.2d" % i for i in range(1, 4)], fluor_paths_)
@@ -111,19 +111,20 @@ def get_cp_dataset(im_dir, feature_file, standardize=False, seed=None, wells=Non
         x.append(fluors[k])
 
     return CPSequence(
-        x, feature_file, batch_size=1, standardize=standardize, seed=seed, used_wells=wells)
+        x, feature_file, batch_size=1, norm_med=norm_med, seed=seed, used_wells=wells)
 
-def get_u_cp_dataset(im_dir, feature_file, standardize=False, seed=None, wells=None, use_crop_id=False):
-    '''
+def get_u_cp_dataset(im_dir, feature_file, norm_med=False, seed=None, wells=None, use_crop_id=False):
+
+    """
     :param im_dir: folder containing the input images
     :param feature_file: output .csv file from CP
-    :param standardize: True if input should be standardized, a tuple with (mean, std) to standardize with, or False if
-                        no standardization is needed
+    :param norm_med: True if input should be normalized (division by median), median to divide features with, or False if
+                        no normalization is needed
     :param seed: random seed for the generator
     :param wells: wells to include from the dataset
     :param use_crop_id: True if input images have crop ids on the end of the files ("like '..._xx.tif')
     :return: U_CPSequence instance (generator)
-    '''
+    """
     path_list = os.listdir(im_dir)
     label_paths_ = filter(lambda p: p[-10:-7] in ["C%.2d" % i for i in range(1, 4)], path_list) if use_crop_id\
         else filter(lambda p: p[-7:-4] in ["C%.2d" % i for i in range(1, 4)], path_list)
@@ -179,7 +180,7 @@ def get_u_cp_dataset(im_dir, feature_file, standardize=False, seed=None, wells=N
         x.append(images[k])
         y.append(labels[k])
 
-    return U_CPSequence(x, y, feature_file, batch_size=1,  standardize=standardize, seed=seed, used_wells=wells)
+    return U_CPSequence(x, y, feature_file, batch_size=1, norm_med=norm_med, seed=seed, used_wells=wells)
 
 
 # params
@@ -189,7 +190,7 @@ train_ws = list(filter(lambda w: w not in val_ws, config.wells))
 
 # training CP feature predictor
 train_sequence = get_cp_dataset(config.data_dir, config.feature_file_path, True, config.seed, use_crop_id=True, wells=train_ws)
-val_sequence = get_cp_dataset(config.data_dir, config.feature_file_path, train_sequence.standardize_params, config.seed, use_crop_id=True, wells=val_ws)
+val_sequence = get_cp_dataset(config.data_dir, config.feature_file_path, train_sequence.norm_med, config.seed, use_crop_id=True, wells=val_ws)
 cp_input = Input(shape=cp_input_shape)
 cp_net = CP(cp_input_shape, config.n_features)(cp_input)
 cp_net = Model(cp_input, cp_net)
@@ -200,7 +201,7 @@ cp_net.save_weights(config.u_cp_weights_path)
 
 
 train_sequence = get_u_cp_dataset(config.data_dir, config.feature_file_path, True, config.seed, use_crop_id=True, wells=train_ws)
-val_sequence = get_u_cp_dataset(config.data_dir, config.feature_file_path, train_sequence.standardize_params, config.seed, use_crop_id=True, wells=val_ws)
+val_sequence = get_u_cp_dataset(config.data_dir, config.feature_file_path, train_sequence.norm_med, config.seed, use_crop_id=True, wells=val_ws)
 
 model = U_CP(config.net_input_shape, config.n_features)
 model.compile("adam", "mse", "mae")

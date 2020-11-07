@@ -196,7 +196,7 @@ class AugmentationGenerator(BaseGenerator):
 
 class CPSequence(AugmentationGenerator):
 
-    def __init__(self, X, y, batch_size, standardize=False, seed=None, shuffle=True, transform=True, used_wells=None):
+    def __init__(self, X, y, batch_size, norm_med=None, seed=None, shuffle=True, transform=True, used_wells=None):
         self.rand_instance = Random()
         cols = np.genfromtxt(y, np.str, delimiter=",", max_rows=1)
 
@@ -207,13 +207,13 @@ class CPSequence(AugmentationGenerator):
         if used_wells is not None:
             wells = np.loadtxt(y, np.str, delimiter=",", usecols=np.squeeze(np.argwhere(cols=="Metadata_Well")), skiprows=1)
             features = features[np.isin(wells, used_wells)]
-        self.standardize_params = None
-        if standardize is True:
-            self.standardize_params = features.mean(axis=0, keepdims=True), features.std(axis=0, keepdims=True)
-            features = (features-self.standardize_params[0])/self.standardize_params[1]
-        elif standardize:
-            self.standardize_params = standardize[0], standardize[1]
-            features = (features-standardize[0])/standardize[1]
+        self.norm_med = None
+        if norm_med is True:
+            self.norm_med = np.median(features, axis=0, keepdims=True)
+            features = features / self.norm_med
+        elif norm_med is not None:
+            self.norm_med = norm_med
+            features = features / norm_med
 
         super().__init__(np.asarray(X).reshape(-1, 3), features, batch_size,
                          rotate=transform, flip_ud=transform, flip_lr=transform,
@@ -259,9 +259,8 @@ class CPSequence(AugmentationGenerator):
 
 
 class U_CPSequence(CPSequence):
-
-    def __init__(self, X, y, f, batch_size, standardize=False, seed=None, shuffle=True, transform=True, used_wells=None):
-        super().__init__(y, f, batch_size, standardize, seed, shuffle, transform, used_wells)
+    def __init__(self, X, y, f, batch_size, norm_med=None, seed=None, shuffle=True, transform=True, used_wells=None):
+        super().__init__(y, f, batch_size, norm_med, seed, shuffle, transform, used_wells)
         self.br = np.asarray(X).reshape(-1, 7)
 
     def __getitem__(self, index):
