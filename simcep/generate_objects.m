@@ -59,7 +59,9 @@ for ind = 1:population.N
 			end
 			
 			%Generate new nucleus
-			n = nucleus([Y X], ind, cell_obj.nucleus.radius,cell_obj.nucleus.shape,...
+            rm = cell_obj.nucleus.radius_multiplier;
+            radius = cell_obj.nucleus.radius * (rand*(rm(2)-rm(1)) + rm(1));
+			n = nucleus([Y X], ind, radius, cell_obj.nucleus.shape,...
 				cell_obj.nucleus.texture);
 			[locations,status] = add_object(n,locations,population.overlap);
 	

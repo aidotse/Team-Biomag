@@ -6,10 +6,11 @@
 % will be simulated. For example, ones(500), results as a 500 x 500 image
 % where cells can be simulated in every part of the image.
 % population.template = ones(950);
-population.template = ones(1024);
+% population.template = ones(1500);
+population.template = ones(2554);
 
 % Amount of cells simulated in the image
-population.N = 40;
+population.N = 150;
 
 % Amount of clusters
 population.clust = 4;
@@ -41,10 +42,10 @@ measurement.misalign_x = 0;
 measurement.misalign_y = 0;
 
 % Energy of autofluorescence compared to the energy of cells
-measurement.autofluorscale = 0.05;
+measurement.autofluorscale = 0;
 
 % Variance of noise for ccd detector
-measurement.ccd = 0.0001;
+measurement.ccd = 0;
 
 % Amount of compression artefacts
 measurement.comp = 0.0;
@@ -60,7 +61,7 @@ measurement.comp = 0.0;
 cell_obj.cytoplasm.include = 0;
 
 % Cytoplasm radius
-cell_obj.cytoplasm.radius = 25;
+cell_obj.cytoplasm.radius = 40;
 
 % Parameters for random shape
 cell_obj.cytoplasm.shape = [0.3 0.05];
@@ -72,6 +73,7 @@ cell_obj.cytoplasm.texture = [0.9 2 8 0.2];
 %%% Nuclei (see cytoplasm parameters for details)
 cell_obj.nucleus.include = 1;
 cell_obj.nucleus.radius = 20;
+cell_obj.nucleus.radius_multiplier = [0.8, 1.5];
 cell_obj.nucleus.shape = [0.1, 0.3]; %[0.1 0.1];
 % cell_obj.nucleus.shape = [0.1, 0.05]; %[0.1 0.1];
 cell_obj.nucleus.texture = [0.5 2 5 0.2];
