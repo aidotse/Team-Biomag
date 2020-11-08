@@ -15,7 +15,11 @@
 function[RGB, BW] = simcep
 
 %Read simulation parameters
-simcep_options;
+if exist('simcep_options')
+    simcep_options;
+else
+    simcep_options20;
+end
 
 %Generate cells
 disp('Generating objects...')

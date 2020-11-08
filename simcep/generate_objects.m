@@ -24,7 +24,8 @@ cluster = [randi(size(population.template,1),1,population.clust)+1;...
     randi(size(population.template,2),1,population.clust)+1];
 
 %Generate requited amount objects
-for ind = 1:population.N
+num_objs_to_generate = population.N + round(population.N * (rand*2-1)*population.N_stdev);
+for ind = 1:num_objs_to_generate
 	
 	%Status for succesful object generation
 	status = 0;
@@ -59,8 +60,10 @@ for ind = 1:population.N
 			end
 			
 			%Generate new nucleus
-            rm = cell_obj.nucleus.radius_multiplier;
-            radius = cell_obj.nucleus.radius * (rand*(rm(2)-rm(1)) + rm(1));
+%             rm = cell_obj.nucleus.radius_multiplier;
+%             radius = cell_obj.nucleus.radius * (rand*(rm(2)-rm(1)) + rm(1));
+            rm = cell_obj.nucleus.radius_minmax;
+            radius = rand*(rm(2) - rm(1)) + rm(1);
 			n = nucleus([Y X], ind, radius, cell_obj.nucleus.shape,...
 				cell_obj.nucleus.texture);
 			[locations,status] = add_object(n,locations,population.overlap);
