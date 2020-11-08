@@ -9,3 +9,6 @@ init.py
 output
 
 set_paths.sh
+
+*.mexa64
+
