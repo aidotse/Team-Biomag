@@ -7,7 +7,7 @@ import imageio
 import matplotlib.pyplot as plt
 from tensorflow.keras.layers import Input, Conv2D
 from tensorflow.keras.models import Model
-from tensorflow.keras.losses import MeanSquaredError, BinaryCrossentropy
+from tensorflow.keras.losses import MeanSquaredError
 
 import config
 import init
@@ -16,6 +16,8 @@ import dataset
 import stardist_blocks as sd
 import tiled_copy
 import misc
+
+
 
 def visualize(original, augmented):
     fig = plt.figure()
@@ -85,6 +87,7 @@ def train(sequences, model):
 
     return model
 
+
 def predict_tiled(x, y_channels, tile_sizes):
     ys, xs = np.shape(x)[1], np.shape(x)[2]
     (y_src, y_src_crop, y_target), (x_src, x_src_crop, x_target) = tiled_copy.get_tiles(ys, tile_sizes[0]), tiled_copy.get_tiles(xs, tile_sizes[1])
@@ -131,14 +134,14 @@ def test(sequence, model=None, save=False, tile_sizes=None):
             
             y_pred_sample = y_pred[batch_element]
 
-            plt.subplot(plot_layout + 6, title='Predicted fluorescent (red)')
-            plt.imshow(y_pred_sample[..., 0])
-
-            plt.subplot(plot_layout + 7, title='Predicted Fluorescent (green)')
-            plt.imshow(y_pred_sample[..., 1])
-
-            plt.subplot(plot_layout + 8, title='Predicted Fluorescent (blue)')
-            plt.imshow(y_pred_sample[..., 2])
+            # plt.subplot(plot_layout + 6, title='Predicted fluorescent (red)')
+            # plt.imshow(y_pred_sample[..., 0])
+            #
+            # plt.subplot(plot_layout + 7, title='Predicted Fluorescent (green)')
+            # plt.imshow(y_pred_sample[..., 1])
+            #
+            # plt.subplot(plot_layout + 8, title='Predicted Fluorescent (blue)')
+            # plt.imshow(y_pred_sample[..., 2])
 
             if save and not config.readonly:
                 magnification = misc.magnification_level(meta[batch_element][0])
@@ -199,17 +202,17 @@ def test(sequence, model=None, save=False, tile_sizes=None):
                     imageio.imwrite(os.path.join(result_subdir, out_filename_pattern % (channel_id+1, channel_id+1)), y_pred_sample[..., channel_id])
                 """
 
-        plt.subplot(plot_layout + 1, title='Input Brightfield@Z=%d' % z_pos)
-        plt.imshow(x_im)
-
-        plt.subplot(plot_layout + 2, title='GT Fluorescent (red)')
-        plt.imshow(y_im[..., 0])
-
-        plt.subplot(plot_layout + 3, title='GT Fluorescent (green)')
-        plt.imshow(y_im[..., 1])
-        
-        plt.subplot(plot_layout + 4, title='GT Fluorescent (blue)')
-        plt.imshow(y_im[..., 2])
+        # plt.subplot(plot_layout + 1, title='Input Brightfield@Z=%d' % z_pos)
+        # plt.imshow(x_im)
+        #
+        # plt.subplot(plot_layout + 2, title='GT Fluorescent (red)')
+        # plt.imshow(y_im[..., 0])
+        #
+        # plt.subplot(plot_layout + 3, title='GT Fluorescent (green)')
+        # plt.imshow(y_im[..., 1])
+        #
+        # plt.subplot(plot_layout + 4, title='GT Fluorescent (blue)')
+        # plt.imshow(y_im[..., 2])
 
         #plt.show()
         #plt.savefig('%d.png' % idx)
@@ -252,8 +255,7 @@ if __name__ == '__main__':
         sample_per_image=config.val_samples_per_image, 
         random_subsample_input=False, 
         seed=config.seed, 
-        resetseed=True,
-         filter_fun=lambda im: dataset.info(im)[1] in lo_ws)
+        resetseed=True)
 
     print('Length of the train sequence: %d' % len(train_sequence))
     print('Length of the val sequence: %d' % len(val_sequence))
