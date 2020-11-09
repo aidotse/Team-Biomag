@@ -58,8 +58,8 @@ def get_network():
             total_loss += weights[ch_id] * ch_mse
         return total_loss
 
-    #model.compile(optimizer='adam', loss='mean_squared_error')
-    model.compile(optimizer='adam', loss=channelwise_loss)
+    model.compile(optimizer='adam', loss='mean_squared_error')
+    #model.compile(optimizer='adam', loss=channelwise_loss)
     return model
 
 
