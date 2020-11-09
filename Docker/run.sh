@@ -12,6 +12,7 @@ CODE_DIR=$ROOT_DIR/src
 nvidia-docker  run   \
 	-v $DATA_DIR:/data \
 	-v $CODE_DIR:/src \
+	-u $(id -u):$(id -g) \
 	-it biomag:adipocyte \
 	--name biomag_container \
 	/bin/bash 
