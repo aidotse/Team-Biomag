@@ -3,6 +3,7 @@ from glob import glob
 from collections import defaultdict
 import numpy as numpy
 import matplotlib.pyplot as plt
+
 import imageio
 import numpy as np
 import pprint
@@ -10,7 +11,6 @@ from statistics import median_low, median_high
 
 import config
 import init
-
 import misc
 
 pp = pprint.PrettyPrinter(indent=4)

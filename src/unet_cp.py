@@ -12,6 +12,7 @@ from tensorflow.keras import Model
 from generators import CPSequence, U_CPSequence
 
 
+
 def CP(input_shape, n_features):
     """ CP feature predictor network. Uses ResNet50 V2.
 

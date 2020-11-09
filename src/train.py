@@ -7,7 +7,7 @@ import imageio
 import matplotlib.pyplot as plt
 from tensorflow.keras.layers import Input, Conv2D
 from tensorflow.keras.models import Model
-from tensorflow.keras.losses import MeanSquaredError, BinaryCrossentropy
+from tensorflow.keras.losses import MeanSquaredError
 
 import config
 import init
@@ -16,6 +16,8 @@ import dataset
 import stardist_blocks as sd
 import tiled_copy
 import misc
+
+
 
 def visualize(original, augmented):
     fig = plt.figure()

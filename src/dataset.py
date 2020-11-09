@@ -1,4 +1,3 @@
-import sys
 import os
 import math
 from random import Random
@@ -7,14 +6,14 @@ from collections import defaultdict
 
 import numpy as np
 import imageio
-import matplotlib.pyplot as plt
 from tensorflow.keras.utils import Sequence
 from skimage import transform
 
-import config
 import init
+import config
 
 import misc
+
 
 def load_limits():
     print('Loading limits statistics to scale the intensities.')
