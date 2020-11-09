@@ -15,7 +15,8 @@ from skimage.filters import threshold_otsu
 # output_folder = "/home/koosk/data/images/adipocyte/dataset/40x-nuclei_thresholded"
 input_folder = "/home/koosk/data/images/adipocyte/dataset/60x"
 output_folder = "/home/koosk/data/images/adipocyte/dataset/60x-nuclei_thresholded"
-
+# input_folder = "/home/koosk/data/images/adipocyte/nuclei_CP_mask-60x-indexed"
+# output_folder = "/home/koosk/data/images/adipocyte/nuclei_CP_mask-60x"
 
 if __name__ == '__main__':
     """
@@ -35,6 +36,7 @@ if __name__ == '__main__':
         # print(np.max(image))
         # print(np.shape(image))
         thresh = threshold_otsu(image)
+        # thresh = 0
         binary = image > thresh
         # # binary = np.asarray(binary)
         # print(type(image))
