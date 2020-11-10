@@ -3,14 +3,15 @@ from glob import glob
 from collections import defaultdict
 import numpy as numpy
 import matplotlib.pyplot as plt
+
 import imageio
 import numpy as np
 import pprint
-import json
 from statistics import median_low, median_high
 
 import config
 import init
+import misc
 
 pp = pprint.PrettyPrinter(indent=4)
 
@@ -38,12 +39,11 @@ def simplify(only_measure=True):
     # Intensity limit tolerance
     tol = 100
 
-    ims = defaultdict(list)
-
     out = {}
 
     magnifications = ['20x', '40x', '60x']
-    for magnification in [magnifications[2]]:
+    for magnification in magnifications:
+        ims = defaultdict(list)
         data_path = os.path.join(data_folder, magnification)
         for im in os.listdir(data_path):
             k = im[:len('AssayPlate_Greiner_#655090_D04_T0001F006')]
@@ -51,7 +51,15 @@ def simplify(only_measure=True):
 
         for k in ims.keys():
             ims[k].sort()
-        
+
+        #import pprint
+        #print('Images at mag:', magnification)
+        #pp = pprint.PrettyPrinter(indent=4)
+        #pp.pprint(ims)
+
+        for k in ims.keys():
+            print(k, len(ims[k]))
+
         # Intensity minimums and maximums for each channel for each image
         lows = defaultdict(list)
         highs = defaultdict(list)
@@ -62,6 +70,9 @@ def simplify(only_measure=True):
         for idx, im_key in enumerate(ims.keys()):
             merged = []
             # Process fluos
+
+            print('Fluo keys:', ims[im_key][:3])
+
             for ch_id, fluo_filename in enumerate(ims[im_key][:3]):
                 n, _a, _b, pad = 0, 0, 0, 0
                 sort_ch = None
@@ -83,7 +94,7 @@ def simplify(only_measure=True):
                 highs[ch_id].append(_b)
                 mins[ch_id].append(sort_ch[0])
                 maxs[ch_id].append(sort_ch[-1])
-                print('im: %s low: %s high: %s min: %s max: %s' % (fluo_path, _a, _b, sort_ch[0], sort_ch[-1]))
+                print('im (fluo): %s, %s low: %s high: %s min: %s max: %s' % (fluo_path, magnification, _a, _b, sort_ch[0], sort_ch[-1]))
 
             # Process brightfields
             for bright_filename in ims[im_key][3:]:
@@ -109,7 +120,7 @@ def simplify(only_measure=True):
                 highs[ch_id].append(_b)
                 mins[ch_id].append(sort_ch[0])
                 maxs[ch_id].append(sort_ch[-1])
-                print('im: %s mag: %s low: %s high: %s min: %s max: %s' % (bright_path, magnification, _a, _b, sort_ch[0], sort_ch[-1]))
+                print('im (bright): %s mag: %s low: %s high: %s min: %s max: %s' % (bright_path, magnification, _a, _b, sort_ch[0], sort_ch[-1]))
 
         channels = list(range(4))
 
@@ -123,6 +134,8 @@ def simplify(only_measure=True):
             print('HIGHS', ch_ids, highs[ch_ids])
 
         ch_id = None
+        limits = None
+        minmax = None
         limits = {
             'low': [int(median_low(lows[ch_id])) for ch_id in channels], 
             'high': [int(median_high(highs[ch_id])) for ch_id in channels]}
@@ -133,8 +146,7 @@ def simplify(only_measure=True):
 
         print(limits, minmax)
 
-        with open(os.path.join(out_path, config.limits_file % magnification), 'w') as outfile:
-            json.dump(limits, outfile)
+        misc.put_json(os.path.join(out_path, config.limits_file) % magnification, limits)
 
         if only_measure == False:
             print('Exporting dataset')
