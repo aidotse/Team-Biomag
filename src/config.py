@@ -22,12 +22,12 @@ splity = 1641
 target_size = (2154, 2554)
 
 # The input will be sampled with this size.
-#sample_crop = (512, 512, 1)
-sample_crop = (1024, 1024, 1)
+sample_crop = (512, 512, 1)
+#sample_crop = (1024, 1024, 1)
 
 # Resize the crops befire returning it.
-resize_crop = (512, 512)
-#resize_crop = None
+#resize_crop = (512, 512)
+resize_crop = None
 
 # As the network is fully convolutional it can be independent of the input shape.
 net_input_shape = (None, None, 7)
