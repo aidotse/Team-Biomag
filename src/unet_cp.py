@@ -291,11 +291,15 @@ u_net.fit(train_sequence, epochs=1, validation_data=val_sequence)
 
 train_sequence = get_u_cp_dataset(config.cropped_data_dir, config.feature_file_path, True, config.seed, use_crop_id=True, wells=train_ws)
 val_sequence = get_u_cp_dataset(config.cropped_data_dir, config.feature_file_path, train_sequence.norm_med, config.seed, use_crop_id=True, wells=val_ws)
-cb = ModelCheckpoint(config.checkpoint_path[:-3] + "_ucp.h5")
+cb = None
+if config.checkpoint_path is not None:
+    cb = [ModelCheckpoint(config.checkpoint_path)]
 
 model = U_CP(config.net_input_shape, config.n_features, norm_bounds=(low, high), n_depth=3)
 model.compile("adam", "mse", "mae")
-model.load_weights(config.cp_weights_path, True)
-model.load_weights(config.u_weights_path, True)
+if config.cp_weights_path is not None:
+    model.load_weights(config.cp_weights_path, True)
+if config.u_weights_path is not None:
+    model.load_weights(config.u_weights_path, True)
 model.summary(line_length=120)
-model.fit(train_sequence, epochs=8, validation_data=val_sequence, callbacks=[cb])
+model.fit(train_sequence, epochs=8, validation_data=val_sequence, callbacks=cb)
