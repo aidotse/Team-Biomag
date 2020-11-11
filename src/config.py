@@ -26,6 +26,10 @@ sample_crop = (512, 512, 1)
 # As the network is fully convolutional it can be independent of the input shape.
 net_input_shape = (None, None, 7)
 
+# Whether to extract random images from the sets.
+train_subsample = True
+val_subsample = True
+
 train = True
 
 # The outputs will go to the output/$CURRENT-DATE
@@ -53,4 +57,4 @@ n_features = 99
 u_cp_weights_path = None
 feature_file_path = None
 
-initial_epoch = 1
+initial_epoch = 0

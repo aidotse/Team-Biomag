@@ -33,7 +33,7 @@ def visualize(original, augmented):
 
 def get_network():
     unet_input = Input(shape=config.net_input_shape)
-    unet_out = sd.unet_block(n_filter_base=64)(unet_input)
+    unet_out = sd.unet_block(3, n_filter_base=64)(unet_input)
     fluo_channels = Conv2D(3, (1, 1), name='fluo_channels', activation='sigmoid')(unet_out)
     
     model = Model(unet_input, fluo_channels)
@@ -49,44 +49,19 @@ def get_network():
     The default MeanSquaredError will reduce the mean over the whole batch.
 
     '''
+
     def channelwise_loss(y_true, y_pred):
-        
+        weights = [1., .0, .0]
+
         total_loss = 0.
-        
-        weights = [.5, .2, .3]
-        #weights = [1., 1., 1.]
-
-        for ch in [0, 1, 2]:
-            total_loss += weights[ch] * MeanSquaredError()(y_true[..., ch], y_pred[..., ch])
-            '''
-            total_loss += weights[ch] * BinaryCrossentropy(reduction=tf.keras.losses.Reduction.NONE)(
-                        y_true[..., ch], 
-                        y_pred[..., ch]
-                    )
-            '''
-
-
-        # The first channel is the nuclei
-        # Most of the pixels below the intensity 600 are the part of the background and correlates with the cyto.
-        # Therefore we concentrate on the >600 ground truth pixels. (600 ~ .1 after normalization)
-        #nuclei_weight = .8
-        #nuclei_thresh = .1
-        
-        #nuclei_weight_tensor = nuclei_weight*tf.cast(y_true[..., 0] > nuclei_thresh, tf.float32) + (1.-tf.cast(y_true[..., 0] <= nuclei_thresh, tf.float32))
-        
-        '''
-        nuclei_loss = BinaryCrossentropy(reduction=tf.keras.losses.Reduction.NONE)(
-            y_true[..., 0], 
-            y_pred[..., 0]
-        )
-        '''
-        
-        #total_loss += tf.math.reduce_mean(nuclei_loss * nuclei_weight_tensor)
-        #total_loss += tf.math.reduce_mean(nuclei_loss)
-
+        for ch_id in [0, 1, 2]:
+            ch_mse = MeanSquaredError()(y_true[..., ch_id], y_pred[..., ch_id])
+            #ch_bce = BinaryCrossentropy(reduction=tf.keras.losses.Reduction.NONE)(y_true[..., ch], y_pred[..., ch])
+            total_loss += weights[ch_id] * ch_mse
         return total_loss
 
     model.compile(optimizer='adam', loss='mean_squared_error')
+    #model.compile(optimizer='adam', loss=channelwise_loss)
     return model
 
 
@@ -227,17 +202,17 @@ def test(sequence, model=None, save=False, tile_sizes=None):
                     imageio.imwrite(os.path.join(result_subdir, out_filename_pattern % (channel_id+1, channel_id+1)), y_pred_sample[..., channel_id])
                 """
 
-        # plt.subplot(plot_layout + 1, title='Input Brightfield@Z=%d' % z_pos)
-        # plt.imshow(x_im)
-        #
-        # plt.subplot(plot_layout + 2, title='GT Fluorescent (red)')
-        # plt.imshow(y_im[..., 0])
-        #
-        # plt.subplot(plot_layout + 3, title='GT Fluorescent (green)')
-        # plt.imshow(y_im[..., 1])
-        #
-        # plt.subplot(plot_layout + 4, title='GT Fluorescent (blue)')
-        # plt.imshow(y_im[..., 2])
+        plt.subplot(plot_layout + 1, title='Input Brightfield@Z=%d' % z_pos)
+        plt.imshow(x_im)
+        
+        plt.subplot(plot_layout + 2, title='GT Fluorescent (red)')
+        plt.imshow(y_im[..., 0])
+        
+        plt.subplot(plot_layout + 3, title='GT Fluorescent (green)')
+        plt.imshow(y_im[..., 1])
+        
+        plt.subplot(plot_layout + 4, title='GT Fluorescent (blue)')
+        plt.imshow(y_im[..., 2])
 
         #plt.show()
         #plt.savefig('%d.png' % idx)
@@ -270,7 +245,7 @@ if __name__ == '__main__':
         config.data_dir, 
         train_=True, 
         sample_per_image=config.train_samples_per_image, 
-        random_subsample_input=True, 
+        random_subsample_input=config.train_subsample, 
         seed=config.seed, 
         filter_fun=lambda im: dataset.info(im)[1] not in lo_ws)
     
@@ -278,9 +253,10 @@ if __name__ == '__main__':
         config.data_dir, 
         train_=False, 
         sample_per_image=config.val_samples_per_image, 
-        random_subsample_input=False, 
+        random_subsample_input=config.val_subsample, 
         seed=config.seed, 
-        resetseed=True)
+        resetseed=True,
+        filter_fun=lambda im: dataset.info(im)[1] in lo_ws)
 
     print('Length of the train sequence: %d' % len(train_sequence))
     print('Length of the val sequence: %d' % len(val_sequence))
@@ -290,6 +266,8 @@ if __name__ == '__main__':
     if config.init_weights is not None:
         print('Loading weights:', config.init_weights)
         model.load_weights(config.init_weights)
+
+    #test(train_sequence)
 
     if config.train == True:
         model = train((train_sequence, val_sequence), model)
