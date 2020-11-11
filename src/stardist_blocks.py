@@ -56,6 +56,7 @@ def unet_block(n_depth=2, n_filter_base=16, kernel_size=(3,3), n_conv_per_depth=
 
     def _func(input):
         skip_layers = []
+        concat_layers = []
         layer = input
 
         # down ...
@@ -86,6 +87,7 @@ def unet_block(n_depth=2, n_filter_base=16, kernel_size=(3,3), n_conv_per_depth=
         # ...and up with skip layers
         for n in reversed(range(n_depth)):
             layer = Concatenate(axis=channel_axis)([upsampling(pool)(layer), skip_layers[n]])
+            concat_layers.append(layer)
             for i in range(n_conv_per_depth - 1):
                 layer = conv_block(n_filter_base * 2 ** n, *kernel_size,
                                    dropout=dropout,
@@ -99,6 +101,6 @@ def unet_block(n_depth=2, n_filter_base=16, kernel_size=(3,3), n_conv_per_depth=
                                activation=activation if n > 0 else last_activation,
                                batch_norm=batch_norm, name=_name("up_level_%s_no_%s" % (n, n_conv_per_depth)))(layer)
 
-        return layer
+        return layer, skip_layers, concat_layers
 
     return _func

@@ -22,7 +22,12 @@ splity = 1641
 target_size = (2154, 2554)
 
 # The input will be sampled with this size.
-sample_crop = (512, 512, 1)
+#sample_crop = (512, 512, 1)
+sample_crop = (1024, 1024, 1)
+
+# Resize the crops befire returning it.
+resize_crop = (512, 512)
+#resize_crop = None
 
 # As the network is fully convolutional it can be independent of the input shape.
 net_input_shape = (None, None, 7)
@@ -36,6 +41,7 @@ train = True
 # The outputs will go to the output/$CURRENT-DATE
 TRAIN_ID = datetime.now().strftime("%Y-%m%d_%H-%M-%S")
 output_dir = os.path.join('output', TRAIN_ID)
+experiment_id = 'predicted'
 
 init_weights = None
 
@@ -62,3 +68,10 @@ feature_file_path = None
 checkpoint_path = None
 
 initial_epoch = 0
+
+# Wether to add the CP fluo channel to the targets next to the fluo channels
+include_nuclei_channel = False
+cp_nuclei_path = '.'
+
+# What size of crop should be used for tiling
+predict_tile_size = (512, 512)
