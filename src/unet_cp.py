@@ -74,7 +74,7 @@ def CP(input_shape, n_features):
 
 
 def Unet(input_layer, **kwargs):
-    unet = sd.unet_block(**kwargs)(input_layer)
+    unet = sd.unet_block(**kwargs)(input_layer)[0]
     fluo_channels = Conv2D(3, (1, 1), name='fluo_channels', activation='sigmoid')(unet)
     return fluo_channels
 
