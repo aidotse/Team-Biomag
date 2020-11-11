@@ -33,10 +33,34 @@ def visualize(original, augmented):
 
 def get_network():
     unet_input = Input(shape=config.net_input_shape)
-    unet_out = sd.unet_block(3, n_filter_base=64)(unet_input)
-    fluo_channels = Conv2D(3, (1, 1), name='fluo_channels', activation='sigmoid')(unet_out)
+    unet_block_out, skip_layers, concat_layers = sd.unet_block(3, n_filter_base=64)(unet_input)
+    from tensorflow.keras.layers import Conv2D, BatchNormalization, Activation, Dropout, MaxPooling2D, UpSampling2D, Concatenate
+    fluo_channels = Conv2D(3, (1, 1), name='fluo_channels', activation='sigmoid')(unet_block_out)
+
+    # We can add another branch to the output of the middle upsample layer and supervise the 
+    # CP nuclei segmentation... The loss should be modified to use bce for the 4th channel.
+    if config.include_nuclei_channel:
+
+        concat_m2_f = 256
+        concat_m2 = concat_layers[-2]
+        skip_0 = skip_layers[0]
+        conv_kernel = (3,3)
+        pool = (2,2)
+        padding = "same"
+
+        l = Conv2D(concat_m2_f//(2**1), conv_kernel, padding=padding)(concat_m2)
+        l = Conv2D(concat_m2_f//(2**2), conv_kernel, padding=padding)(l)
+        l = UpSampling2D(pool)(l)
+        l = Concatenate()([l, skip_0])
+        l = Conv2D(concat_m2_f//(2**2), conv_kernel, padding=padding)(l)
+        l = Conv2D(concat_m2_f//(2**2), conv_kernel, padding=padding)(l)
+        nuclei_seg = Conv2D(1, (1,1), name='nuclei_seg', activation='sigmoid')(l)
     
-    model = Model(unet_input, fluo_channels)
+        unet_output = Concatenate(-1, name='result')([fluo_channels, nuclei_seg])
+    else:
+        unet_output = fluo_channels
+
+    model = Model(unet_input, unet_output)
     model.summary(line_length=130)
 
     '''

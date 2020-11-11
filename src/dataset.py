@@ -3,6 +3,7 @@ import math
 from random import Random
 from glob import glob
 from collections import defaultdict
+import pprint
 
 import numpy as np
 import imageio
@@ -157,9 +158,6 @@ class AZSequence(Sequence):
         fliplr_tf = np.random.uniform() < config.fliplr_p
         flipud_tf = np.random.uniform() < config.flipud_p
 
-        import pprint
-        pp = pprint.PrettyPrinter(indent=4)
-
         for batch_elem in batch_x:
             mag_level = misc.magnification_level(batch_elem[0])
             image = self.read_stack(batch_elem, self.train, random_subsample)
@@ -177,11 +175,25 @@ class AZSequence(Sequence):
 
         for batch_elem in batch_y:
             mag_level = misc.magnification_level(batch_elem[0])
-            image = self.read_stack(batch_elem, self.train, random_subsample)
+            
+            if config.include_nuclei_channel:
+                batch_elem_0 = batch_elem[0]
+                batch_elem_0 = os.path.basename(batch_elem_0)
+                nuclei_path_ = os.path.join('/media/ervin/SSD-Data/adipocyte-nuclei', mag_level, batch_elem_0 + 'f')
+        
+                image = self.read_stack(batch_elem + [nuclei_path_], self.train, random_subsample)
+            else:
+                image = self.read_stack(batch_elem, self.train, random_subsample)
             image = np.transpose(image, (1, 2, 0))
 
+            if config.include_nuclei_channel:
+                image[..., 3] = (image[..., 3] > 0).astype(image.dtype)
+            
+
             # Normalize to [0. 1.]
-            for ch in range(len(batch_elem)):
+            #channels = len(batch_elem)
+            channels = 3
+            for ch in range(channels):
                 image[..., ch] = normalize(
                     image[..., ch], 
                     self.norm[mag_level]['low'][ch], 
@@ -250,6 +262,10 @@ def get_dataset(data_dir, train_, sample_per_image=60, random_subsample_input=Tr
 
     label_paths.sort()
     image_paths.sort()
+
+    print('Dataset: train=', train_)
+    pp = pprint.PrettyPrinter(indent=4)
+    pp.pprint(label_paths)
 
     '''
     Image format:   AssayPlate_Greiner_#655090_D04_T0001F006L01A04Z03C04.tif - Only the Z varies

@@ -58,3 +58,6 @@ u_cp_weights_path = None
 feature_file_path = None
 
 initial_epoch = 0
+
+# Wether to add the CP fluo channel to the targets next to the fluo channels
+include_nuclei_channel = False
