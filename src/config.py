@@ -65,6 +65,7 @@ u_cp_weights_path = None
 cp_weights_path = None
 u_weights_path = None
 feature_file_path = None
+checkpoint_path = None
 
 initial_epoch = 0
 

@@ -196,13 +196,15 @@ class AugmentationGenerator(BaseGenerator):
 
 class CPSequence(AugmentationGenerator):
 
-    def __init__(self, X, y, batch_size, norm_med=None, seed=None, shuffle=True, transform=True, used_wells=None):
+    def __init__(self, X, y, batch_size, norm_med=None, norm_max=False, seed=None, shuffle=True, transform=True, used_wells=None, ignored_features=None):
         self.rand_instance = Random()
         cols = np.genfromtxt(y, np.str, delimiter=",", max_rows=1)
-
+        if ignored_features is None:
+            ignored_features = []
+        ignored_features.append("ImageNumber")
 
         features = np.loadtxt(y, delimiter=",", usecols=[i for i in range(len(cols))
-                                                       if cols[i] != "ImageNumber"
+                                                       if cols[i] not in ignored_features
                                                        and not cols[i].startswith("Metadata")], skiprows=1)
         if used_wells is not None:
             wells = np.loadtxt(y, np.str, delimiter=",", usecols=np.squeeze(np.argwhere(cols=="Metadata_Well")), skiprows=1)
@@ -220,7 +222,7 @@ class CPSequence(AugmentationGenerator):
                          rotate=transform, flip_ud=transform, flip_lr=transform,
                          shuffle=shuffle, random_seed=seed)
         self.preprocess_x = lambda batch_x: np.concatenate(
-            list(map(lambda p: np.expand_dims(np.transpose(self.read_stack(p, True),
+            list(map(lambda p: np.expand_dims(np.transpose(self.read_stack(p, norm_max),
                                                            (1, 2, 0)), 0),
                      batch_x)), axis=0)
 
@@ -260,8 +262,8 @@ class CPSequence(AugmentationGenerator):
 
 
 class U_CPSequence(CPSequence):
-    def __init__(self, X, y, f, batch_size, norm_med=None, seed=None, shuffle=True, transform=True, used_wells=None):
-        super().__init__(y, f, batch_size, norm_med, seed, shuffle, transform, used_wells)
+    def __init__(self, X, y, f, batch_size, norm_features=None, norm_images=False, seed=None, shuffle=True, transform=True, used_wells=None, ignored_features=None):
+        super().__init__(y, f, batch_size, norm_features, norm_images, seed, shuffle, transform, used_wells, ignored_features)
         self.br = np.asarray(X).reshape(-1, 7)
 
     def __getitem__(self, index):
