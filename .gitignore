@@ -13,3 +13,4 @@ set_paths.sh
 *.mexa64
 simcep/simcep_compression.jpg
 *.m~
+/data/*
