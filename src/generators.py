@@ -220,7 +220,7 @@ class CPSequence(AugmentationGenerator):
                          rotate=transform, flip_ud=transform, flip_lr=transform,
                          shuffle=shuffle, random_seed=seed)
         self.preprocess_x = lambda batch_x: np.concatenate(
-            list(map(lambda p: np.expand_dims(np.transpose(self.read_stack(p, True),
+            list(map(lambda p: np.expand_dims(np.transpose(self.read_stack(p),
                                                            (1, 2, 0)), 0),
                      batch_x)), axis=0)
 
