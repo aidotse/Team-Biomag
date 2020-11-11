@@ -207,6 +207,7 @@ class CPSequence(AugmentationGenerator):
         if used_wells is not None:
             wells = np.loadtxt(y, np.str, delimiter=",", usecols=np.squeeze(np.argwhere(cols=="Metadata_Well")), skiprows=1)
             features = features[np.isin(wells, used_wells)]
+        np.nan_to_num(features, False)
         self.norm_med = None
         if norm_med is True:
             self.norm_med = np.median(features, axis=0, keepdims=True)

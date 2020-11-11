@@ -6,10 +6,47 @@ import dataset
 import init
 import stardist_blocks as sd
 from tensorflow.keras.applications.resnet_v2 import ResNet50V2
-from tensorflow.keras.layers import Input, Dense, Conv2D
+from tensorflow.keras.layers import Input, Dense, Conv2D, Layer
 from tensorflow.keras import Model
+from tensorflow.keras.callbacks import ModelCheckpoint
+import tensorflow as tf
+import tensorflow.keras.backend as K
 
 from generators import CPSequence, U_CPSequence
+
+
+class NormLayer(Layer):
+    def __init__(self, low, high, name=None, dtype=None, dynamic=False, **kwargs):
+        super().__init__(False, name, dtype, dynamic, **kwargs)
+        self.low = tf.cast(low, tf.float32)
+        self.high = tf.cast(high, tf.float32)
+        for i in range(3):
+            self.low = tf.expand_dims(self.low, 0)
+            self.high = tf.expand_dims(self.high, 0)
+
+    def call(self, inputs, **kwargs):
+        return self.normalize(inputs, self.low, self.high)
+    
+    @staticmethod
+    def normalize(inputs, low, high):
+        out = tf.identity(inputs)
+        out -= low
+        out = out / (high-low)
+        out = tf.clip_by_value(out, 0., 1.)
+        return out
+
+
+class DenormLayer(Layer):
+    def __init__(self, low, high, name=None, dtype=None, dynamic=False, **kwargs):
+        super().__init__(False, name, dtype, dynamic, **kwargs)
+        self.low = tf.cast(low, tf.float32)
+        self.high = tf.cast(high, tf.float32)
+        for i in range(3):
+            self.low = tf.expand_dims(self.low, 0)
+            self.high = tf.expand_dims(self.high, 0)
+
+    def call(self, inputs, **kwargs):
+        return dataset.denormalize(inputs, self.low, self.high)
 
 
 
@@ -34,7 +71,13 @@ def CP(input_shape, n_features):
     return cp_net
 
 
-def U_CP(input_shape, n_features, **kwargs):
+def Unet(input_layer, **kwargs):
+    unet = sd.unet_block(**kwargs)(input_layer)
+    fluo_channels = Conv2D(3, (1, 1), name='fluo_channels', activation='sigmoid')(unet)
+    return fluo_channels
+
+
+def U_CP(input_shape, n_features, norm_bounds=None, **kwargs):
     """ U-Net-CP network combined for brightfield to fluorescent generator with CP feature predictor
 
     :param input_shape:
@@ -42,19 +85,22 @@ def U_CP(input_shape, n_features, **kwargs):
     :param kwargs: keyword arguments for unet_block
     :return:
     """
-    input = Input(shape=input_shape)
-    unet = sd.unet_block(n_filter_base=64, **kwargs)(input)
-    fluo_channels = Conv2D(3, (1, 1), name='fluo_channels', activation='sigmoid')(unet)
-    cp_net = CP(input_shape, n_features)(fluo_channels)
+    input_layer = Input(shape=input_shape, dtype=tf.float32)
+    if norm_bounds is not None:
+        norm_layer = NormLayer(norm_bounds[0][0], norm_bounds[1][0], name="norm")(input_layer)
+    unet = Unet(input_layer if norm_bounds is None else norm_layer, n_filter_base=64, **kwargs)
+    if norm_bounds is not None:
+        unet = DenormLayer(norm_bounds[0][1:], norm_bounds[1][1:], name="denorm")(unet)
+    cp_net = CP(input_shape, n_features)(unet)
 
-    return Model(input, [fluo_channels, cp_net])
+    return Model(input_layer, [unet, cp_net])
 
 
 def filter_fun(wells):
     return lambda im: dataset.info(im)[1] in wells
 
 
-def get_cp_dataset(im_dir, feature_file, norm_med=False, seed=None, wells=None, use_crop_id=False):
+def get_cp_dataset(im_dir, feature_file, norm_med=False, seed=None, wells=None, use_crop_id=False, batch_size=1):
     """
 
     :param im_dir: folder containing the input images
@@ -112,9 +158,9 @@ def get_cp_dataset(im_dir, feature_file, norm_med=False, seed=None, wells=None, 
         x.append(fluors[k])
 
     return CPSequence(
-        x, feature_file, batch_size=1, norm_med=norm_med, seed=seed, used_wells=wells)
+        x, feature_file, batch_size=batch_size, norm_med=norm_med, seed=seed, used_wells=wells)
 
-def get_u_cp_dataset(im_dir, feature_file, norm_med=False, seed=None, wells=None, use_crop_id=False):
+def get_u_cp_dataset(im_dir, feature_file, norm_med=False, seed=None, wells=None, use_crop_id=False, batch_size=1):
 
     """
     :param im_dir: folder containing the input images
@@ -181,31 +227,75 @@ def get_u_cp_dataset(im_dir, feature_file, norm_med=False, seed=None, wells=None
         x.append(images[k])
         y.append(labels[k])
 
-    return U_CPSequence(x, y, feature_file, batch_size=1, norm_med=norm_med, seed=seed, used_wells=wells)
+    return U_CPSequence(x, y, feature_file, batch_size=batch_size, norm_med=norm_med, seed=seed, used_wells=wells)
 
+'''
+class PredictImageCallback(Callback):
+    def __init__(self, input_list, out_folder, bounds=None, frequency=10, log_filename=None, input_size=(512, 512, 1)):
+
+        super().__init__()
+        self.input_list = input_list
+        self.out_folder = out_folder
+        self.frequency = frequency
+        self.bounds = bounds
+
+    def on_epoch_end(self, epoch, _=None):
+        import gc
+        gc.collect()
+        if epoch % self.frequency != 0:
+            return
+        out_paths = [os.path.join(self.out_folder, "%s_%.2d.tif" % (self.input_list[i].split(".")[0], epoch))
+                     for i in range(len(self.filename_list))]
+        x = np.zeros([len()])
+        self.model.predict()
+'''
 
 # params
 cp_input_shape = (config.sample_crop[0], config.sample_crop[1], 3)
-val_ws = ['B03']
+val_ws = ['D04']
 train_ws = list(filter(lambda w: w not in val_ws, config.wells))
 
+limits = dataset.load_limits()
+low, high = limits[config.magnifications[0]]["low"], limits[config.magnifications[0]]["high"]
+
 # training CP feature predictor
-train_sequence = get_cp_dataset(config.data_dir, config.feature_file_path, True, config.seed, use_crop_id=True, wells=train_ws)
-val_sequence = get_cp_dataset(config.data_dir, config.feature_file_path, train_sequence.norm_med, config.seed, use_crop_id=True, wells=val_ws)
+'''
+train_sequence = get_cp_dataset(config.cropped_data_dir, config.feature_file_path, True, config.seed, use_crop_id=True, wells=train_ws, batch_size=20)
+val_sequence = get_cp_dataset(config.cropped_data_dir, config.feature_file_path, train_sequence.norm_med, config.seed, use_crop_id=True, wells=val_ws, batch_size=20)
 cp_input = Input(shape=cp_input_shape)
 cp_net = CP(cp_input_shape, config.n_features)(cp_input)
 cp_net = Model(cp_input, cp_net)
-cp_net.summary(line_length=120)
+# cp_net.summary(line_length=120)
 cp_net.compile("adam", "mse", "mae")
-cp_net.fit(train_sequence, epochs=1, validation_data=val_sequence)
+cb = ModelCheckpoint(config.checkpoint_path)
+if not os.path.exists(os.path.dirname(config.checkpoint_path)):
+    os.mkdir(os.path.dirname(config.checkpoint_path))
+# cp_net.fit(train_sequence, epochs=20, validation_data=val_sequence, callbacks=[cb])
 cp_net.save_weights(config.u_cp_weights_path)
+'''
 
+# training U-net
+'''
+train_sequence = dataset.get_dataset(config.data_dir, train_=True, sample_per_image=config.train_samples_per_image,
+                                     random_subsample_input=True, seed=config.seed, filter_fun=lambda im: dataset.info(im)[1] in train_ws)
+val_sequence = dataset.get_dataset(config.data_dir, train_=False, sample_per_image=config.val_samples_per_image,
+                                     random_subsample_input=True, seed=config.seed, filter_fun=lambda im: dataset.info(im)[1] in val_ws, resetseed=True)
 
-train_sequence = get_u_cp_dataset(config.data_dir, config.feature_file_path, True, config.seed, use_crop_id=True, wells=train_ws)
-val_sequence = get_u_cp_dataset(config.data_dir, config.feature_file_path, train_sequence.norm_med, config.seed, use_crop_id=True, wells=val_ws)
+u_input = Input((512, 512, 7))
+u_net = Unet(u_input, n_depth=3, n_filter_base=64)
+u_net = Model(u_input, u_net)
+u_net.compile("adam", "mse") 
+u_net.summary(line_length=120)
+u_net.fit(train_sequence, epochs=1, validation_data=val_sequence)
+'''
 
-model = U_CP(config.net_input_shape, config.n_features)
+train_sequence = get_u_cp_dataset(config.cropped_data_dir, config.feature_file_path, True, config.seed, use_crop_id=True, wells=train_ws)
+val_sequence = get_u_cp_dataset(config.cropped_data_dir, config.feature_file_path, train_sequence.norm_med, config.seed, use_crop_id=True, wells=val_ws)
+cb = ModelCheckpoint(config.checkpoint_path[:-3] + "_ucp.h5")
+
+model = U_CP(config.net_input_shape, config.n_features, norm_bounds=(low, high), n_depth=3)
 model.compile("adam", "mse", "mae")
-model.load_weights(config.u_cp_weights_path, True)
+model.load_weights(config.cp_weights_path, True)
+model.load_weights(config.u_weights_path, True)
 model.summary(line_length=120)
-model.fit(train_sequence, epochs=1, validation_data=val_sequence)
+model.fit(train_sequence, epochs=8, validation_data=val_sequence, callbacks=[cb])
