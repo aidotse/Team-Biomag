@@ -33,7 +33,7 @@ def visualize(original, augmented):
 
 def get_network():
     unet_input = Input(shape=config.net_input_shape)
-    unet_out = sd.unet_block(3, n_filter_base=64, n_conv_per_depth=3)(unet_input)
+    unet_out = sd.unet_block(3, n_filter_base=64, n_conv_per_depth=2)(unet_input)
     fluo_channels = Conv2D(3, (1, 1), name='fluo_channels', activation='sigmoid')(unet_out)
     
     model = Model(unet_input, fluo_channels)
@@ -110,6 +110,9 @@ def test(sequence, model=None, save=False, tile_sizes=None):
     """
     If the model is set, it predicts the image using the model passed and shows the result.
     """
+
+    print('Tile sizes: ', tile_sizes)
+
     sequence.return_meta = True
     mse_per_image = {}
     mse_all = {mag: {i: [] for i in range(3)} for mag in config.magnifications}
@@ -162,7 +165,7 @@ def test(sequence, model=None, save=False, tile_sizes=None):
                 print(out_filename_pattern)
                 
                 # Save visualization results
-                vis_subdir = os.path.join(config.output_dir, 'visual', magnification)
+                vis_subdir = os.path.join(config.output_dir, config.experiment_id, 'visual', magnification)
 
                 os.makedirs(os.path.join(vis_subdir), exist_ok=True)
 
@@ -193,11 +196,10 @@ def test(sequence, model=None, save=False, tile_sizes=None):
                     mse_all[magnification][ch_id].append(mse_ch)
 
                 # Save raw results
-
-                """
-                result_subdir = os.path.join(config.output_dir, 'results', magnification)
+                result_subdir = os.path.join(config.output_dir, config.experiment_id, 'results', magnification)
                 os.makedirs(os.path.join(config.output_dir, result_subdir), exist_ok=True)
 
+                """
                 for channel_id in range(3):
                     imageio.imwrite(os.path.join(result_subdir, out_filename_pattern % (channel_id+1, channel_id+1)), y_pred_sample[..., channel_id])
                 """
@@ -225,15 +227,17 @@ def test(sequence, model=None, save=False, tile_sizes=None):
             imageio.imwrite(os.path.join(config.output_dir, '%d_fluo.tif' % idx, fluo))
 
 
-            imageio.volwrite('%s/pred-%d.tif' % (config.output_dir, idx), y_pred_sample)
-            imageio.volwrite('%s/true-%d.tif' % (config.output_dir, idx), y_im)
-            imageio.volwrite('%s/input-%d.tif' % (config.output_dir, idx), np.transpose(x_sample, (2, 0, 1)))
+            imageio.volwrite('%s/pred-%d.tif' % (result_subdir, idx), y_pred_sample)
+            imageio.volwrite('%s/true-%d.tif' % (result_subdir, idx), y_im)
+            imageio.volwrite('%s/input-%d.tif' % (result_subdir, idx), np.transpose(x_sample, (2, 0, 1)))
 
     final_result = {mag: {ch: mean(mse_all[mag][ch]) for ch in range(3)} for mag in config.magnifications}
 
-    misc.put_json(os.path.join(config.output_dir, 'mse_per_image.json'), mse_per_image)
-    misc.put_json(os.path.join(config.output_dir, 'mse_final.json'), final_result)
-    misc.put_json(os.path.join(config.output_dir, 'mse_all.json'), mse_all)
+    experiment_dir = os.path.join(config.output_dir, config.experiment_id)
+
+    misc.put_json(os.path.join(experiment_dir, 'mse_per_image.json'), mse_per_image)
+    misc.put_json(os.path.join(experiment_dir, 'mse_final.json'), final_result)
+    misc.put_json(os.path.join(experiment_dir, 'mse_all.json'), mse_all)
 
     sequence.return_meta = False
 
@@ -272,5 +276,5 @@ if __name__ == '__main__':
     if config.train == True:
         model = train((train_sequence, val_sequence), model)
     
-    test(val_sequence, model, save=True, tile_sizes=(512, 512))
+    test(val_sequence, model, save=True, tile_sizes=config.predict_tile_size)
     #test(train_sequence)

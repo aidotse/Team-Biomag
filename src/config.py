@@ -35,6 +35,7 @@ train = True
 # The outputs will go to the output/$CURRENT-DATE
 TRAIN_ID = datetime.now().strftime("%Y-%m%d_%H-%M-%S")
 output_dir = os.path.join('output', TRAIN_ID)
+experiment_id = 'predicted'
 
 init_weights = None
 
@@ -58,3 +59,5 @@ u_cp_weights_path = None
 feature_file_path = None
 
 initial_epoch = 0
+
+predict_tile_size = (512, 512)
