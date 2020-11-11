@@ -6,8 +6,8 @@ import dataset
 import init
 import stardist_blocks as sd
 from tensorflow.keras.applications.resnet_v2 import ResNet50V2
-from tensorflow.keras.layers import Input, Dense, Conv2D, Layer
-from tensorflow.keras import Model
+from tensorflow.keras.layers import Input, Dense, Conv2D, Layer, Lambda
+from tensorflow.keras.models import Model, load_model
 from tensorflow.keras.callbacks import ModelCheckpoint
 import tensorflow as tf
 import tensorflow.keras.backend as K
@@ -26,28 +26,29 @@ class NormLayer(Layer):
 
     def call(self, inputs, **kwargs):
         return self.normalize(inputs, self.low, self.high)
-    
+
     @staticmethod
     def normalize(inputs, low, high):
         out = tf.identity(inputs)
         out -= low
-        out = out / (high-low)
+        out = out / (high - low)
         out = tf.clip_by_value(out, 0., 1.)
         return out
 
 
 class DenormLayer(Layer):
-    def __init__(self, low, high, name=None, dtype=None, dynamic=False, **kwargs):
+    def __init__(self, low, high, norm_to_0_1=False, name=None, dtype=None, dynamic=False, **kwargs):
         super().__init__(False, name, dtype, dynamic, **kwargs)
         self.low = tf.cast(low, tf.float32)
         self.high = tf.cast(high, tf.float32)
         for i in range(3):
             self.low = tf.expand_dims(self.low, 0)
             self.high = tf.expand_dims(self.high, 0)
+        self.norm_to_0_1 = norm_to_0_1
 
     def call(self, inputs, **kwargs):
-        return dataset.denormalize(inputs, self.low, self.high)
-
+        out = dataset.denormalize(inputs, self.low, self.high)
+        return out / 65535 if self.norm_to_0_1 else out
 
 
 def CP(input_shape, n_features):
@@ -63,6 +64,7 @@ def CP(input_shape, n_features):
     model = Model(input, cp)
     ...
     """
+
     def cp_net(input):
         resnet = ResNet50V2(False, None, input_tensor=input, input_shape=input_shape, pooling="avg")
         out = Dense(n_features, name="CP_features")(resnet.output)
@@ -90,8 +92,9 @@ def U_CP(input_shape, n_features, norm_bounds=None, **kwargs):
         norm_layer = NormLayer(norm_bounds[0][0], norm_bounds[1][0], name="norm")(input_layer)
     unet = Unet(input_layer if norm_bounds is None else norm_layer, n_filter_base=64, **kwargs)
     if norm_bounds is not None:
-        unet = DenormLayer(norm_bounds[0][1:], norm_bounds[1][1:], name="denorm")(unet)
-    cp_net = CP(input_shape, n_features)(unet)
+        unet = DenormLayer(norm_bounds[0][1:], norm_bounds[1][1:], False, name="denorm")(unet)
+        div = Lambda(tf.divide, arguments={"y": 65535})(unet)
+    cp_net = CP(input_shape, n_features)(unet if norm_bounds is None else div)
 
     return Model(input_layer, [unet, cp_net])
 
@@ -113,9 +116,10 @@ def get_cp_dataset(im_dir, feature_file, norm_med=False, seed=None, wells=None, 
     :return: CPSequence instance (generator)
     """
     fluor_paths_ = os.listdir(im_dir)
-    fluor_paths_ = filter(lambda p: p[-10:-7] in ["C%.2d" % i for i in range(1, 4)], fluor_paths_) if use_crop_id\
+    fluor_paths_ = filter(lambda p: p[-10:-7] in ["C%.2d" % i for i in range(1, 4)], fluor_paths_) if use_crop_id \
         else filter(lambda p: p[-7:-4] in ["C%.2d" % i for i in range(1, 4)], fluor_paths_)
     fluor_paths_ = list(map(lambda p: os.path.join(im_dir, p), fluor_paths_))
+
     def filter_(paths, filter_fun_):
         result_ = []
         for path_ in paths:
@@ -148,24 +152,25 @@ def get_cp_dataset(im_dir, feature_file, norm_med=False, seed=None, wells=None, 
 
     for label in fluor_paths:
         k = (get_im_id(label), get_res(label)) if not use_crop_id else (
-        get_im_id(label), get_res(label), get_crop_id(label))
+            get_im_id(label), get_res(label), get_crop_id(label))
         fluors[k].append(label)
 
     x = []
 
     for k in fluors.keys():
-        #print('Image found:', k)
+        # print('Image found:', k)
         x.append(fluors[k])
 
     return CPSequence(
-        x, feature_file, batch_size=batch_size, norm_med=norm_med, seed=seed, used_wells=wells)
+        x, feature_file, batch_size=batch_size, norm_med=norm_med, norm_max=True, seed=seed, used_wells=wells)
 
-def get_u_cp_dataset(im_dir, feature_file, norm_med=False, seed=None, wells=None, use_crop_id=False, batch_size=1):
 
+def get_u_cp_dataset(im_dir, feature_file, norm_features=False, norm_images=False, seed=None, wells=None, use_crop_id=False,
+                     batch_size=1, ignored_features=None):
     """
     :param im_dir: folder containing the input images
     :param feature_file: output .csv file from CP
-    :param norm_med: True if input should be normalized (division by median), median to divide features with, or False if
+    :param norm_features: True if input should be normalized (division by median), median to divide features with, or False if
                         no normalization is needed
     :param seed: random seed for the generator
     :param wells: wells to include from the dataset
@@ -173,11 +178,11 @@ def get_u_cp_dataset(im_dir, feature_file, norm_med=False, seed=None, wells=None
     :return: U_CPSequence instance (generator)
     """
     path_list = os.listdir(im_dir)
-    label_paths_ = filter(lambda p: p[-10:-7] in ["C%.2d" % i for i in range(1, 4)], path_list) if use_crop_id\
+    label_paths_ = filter(lambda p: p[-10:-7] in ["C%.2d" % i for i in range(1, 4)], path_list) if use_crop_id \
         else filter(lambda p: p[-7:-4] in ["C%.2d" % i for i in range(1, 4)], path_list)
     label_paths_ = list(map(lambda p: os.path.join(im_dir, p), label_paths_))
 
-    image_paths_ = filter(lambda p: p[-10:-7] == "C04", path_list) if use_crop_id\
+    image_paths_ = filter(lambda p: p[-10:-7] == "C04", path_list) if use_crop_id \
         else filter(lambda p: p[-7:-4] == "C04", path_list)
     image_paths_ = list(map(lambda p: os.path.join(im_dir, p), image_paths_))
 
@@ -213,11 +218,13 @@ def get_u_cp_dataset(im_dir, feature_file, norm_med=False, seed=None, wells=None
 
     images, labels = defaultdict(list), defaultdict(list)
     for image in image_paths:
-        k = (get_im_id(image), get_res(image)) if not use_crop_id else (get_im_id(image), get_res(image), get_crop_id(image))
+        k = (get_im_id(image), get_res(image)) if not use_crop_id else (
+        get_im_id(image), get_res(image), get_crop_id(image))
         images[k].append(image)
 
     for label in label_paths:
-        k = (get_im_id(label), get_res(label)) if not use_crop_id else (get_im_id(label), get_res(label), get_crop_id(label))
+        k = (get_im_id(label), get_res(label)) if not use_crop_id else (
+        get_im_id(label), get_res(label), get_crop_id(label))
         labels[k].append(label)
 
     x, y = [], []
@@ -227,7 +234,9 @@ def get_u_cp_dataset(im_dir, feature_file, norm_med=False, seed=None, wells=None
         x.append(images[k])
         y.append(labels[k])
 
-    return U_CPSequence(x, y, feature_file, batch_size=batch_size, norm_med=norm_med, seed=seed, used_wells=wells)
+    return U_CPSequence(x, y, feature_file, batch_size=batch_size, norm_features=norm_features, norm_images=norm_images, seed=seed,
+                        used_wells=wells, ignored_features=ignored_features)
+
 
 '''
 class PredictImageCallback(Callback):
@@ -288,18 +297,39 @@ u_net.compile("adam", "mse")
 u_net.summary(line_length=120)
 u_net.fit(train_sequence, epochs=1, validation_data=val_sequence)
 '''
-
-train_sequence = get_u_cp_dataset(config.cropped_data_dir, config.feature_file_path, True, config.seed, use_crop_id=True, wells=train_ws)
-val_sequence = get_u_cp_dataset(config.cropped_data_dir, config.feature_file_path, train_sequence.norm_med, config.seed, use_crop_id=True, wells=val_ws)
+ignored_features = ["Count_Defective_lipid_droplets",
+                    "Count_Lipids_no_edge",
+                    "Count_cells_no_edge",
+                    "Count_nuclei",
+                    "Count_nuclei_no_edge"]
+train_sequence = get_u_cp_dataset(config.cropped_data_dir, config.feature_file_path, True, seed=config.seed,
+                                  use_crop_id=True, wells=train_ws, ignored_features=ignored_features)
+val_sequence = get_u_cp_dataset(config.cropped_data_dir, config.feature_file_path, train_sequence.norm_med,
+                                seed=config.seed, use_crop_id=True, wells=val_ws, ignored_features=ignored_features)
 cb = None
 if config.checkpoint_path is not None:
     cb = [ModelCheckpoint(config.checkpoint_path)]
 
 model = U_CP(config.net_input_shape, config.n_features, norm_bounds=(low, high), n_depth=3)
-model.compile("adam", "mse", "mae")
+model.compile("adam", "mae", "mse", loss_weights=[1/65535, 1.])
 if config.cp_weights_path is not None:
-    model.load_weights(config.cp_weights_path, True)
+    print("loading CP weights")
+    cp_model = load_model(config.cp_weights_path)
+    for l in cp_model.layers:
+        try:
+            model.get_layer(l.name).set_weights(l.get_weights())
+        except ValueError:
+            if l.name == "dense":
+                model.get_layer("CP_features").set_weights(l.get_weights())
+            else:
+                print(l.name + " not in model")
 if config.u_weights_path is not None:
-    model.load_weights(config.u_weights_path, True)
+    print("loadin U-Net weights")
+    u_model = load_model(config.u_weights_path)
+    for l in u_model.layers:
+        try:
+            model.get_layer(l.name).set_weights(l.get_weights())
+        except ValueError:
+            print(l.name + " not in model")
 model.summary(line_length=120)
 model.fit(train_sequence, epochs=8, validation_data=val_sequence, callbacks=cb)

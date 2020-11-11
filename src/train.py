@@ -5,7 +5,7 @@ import numpy as np
 import tensorflow as tf
 import imageio
 import matplotlib.pyplot as plt
-from tensorflow.keras.layers import Input, Conv2D
+from tensorflow.keras.layers import Input, Conv2D, BatchNormalization, Activation, Dropout, MaxPooling2D, UpSampling2D, Concatenate
 from tensorflow.keras.models import Model
 from tensorflow.keras.losses import MeanSquaredError
 
@@ -33,10 +33,32 @@ def visualize(original, augmented):
 
 def get_network():
     unet_input = Input(shape=config.net_input_shape)
-    unet_out = sd.unet_block(3, n_filter_base=64)(unet_input)
-    fluo_channels = Conv2D(3, (1, 1), name='fluo_channels', activation='sigmoid')(unet_out)
-    
-    model = Model(unet_input, fluo_channels)
+    unet_block_out, skip_layers, concat_layers = sd.unet_block(3, n_filter_base=64)(unet_input)
+    fluo_channels = Conv2D(3, (1, 1), name='fluo_channels', activation='sigmoid')(unet_block_out)
+
+    # We can add another branch to the output of the middle upsample layer and supervise the 
+    # CP nuclei segmentation... The loss should be modified to use bce for the 4th channel.
+    if config.include_nuclei_channel:
+
+        concat_m2_f = 256
+        concat_m2 = concat_layers[-2]
+        skip_0 = skip_layers[0]
+        conv_kernel = (3,3)
+        pool = (2,2)
+        padding = "same"
+
+        l = Conv2D(concat_m2_f//(2**1), conv_kernel, padding=padding)(concat_m2)
+        l = Conv2D(concat_m2_f//(2**2), conv_kernel, padding=padding)(l)
+        l = UpSampling2D(pool)(l)
+        l = Concatenate()([l, skip_0])
+        l = Conv2D(concat_m2_f//(2**2), conv_kernel, padding=padding)(l)
+        l = Conv2D(concat_m2_f//(2**2), conv_kernel, padding=padding)(l)
+        nuclei_seg = Conv2D(1, (1,1), name='nuclei_seg', activation='sigmoid')(l)
+        unet_output = Concatenate(-1, name='result')([fluo_channels, nuclei_seg])
+    else:
+        unet_output = fluo_channels
+
+    model = Model(unet_input, unet_output)
     model.summary(line_length=130)
 
     '''
@@ -110,9 +132,14 @@ def test(sequence, model=None, save=False, tile_sizes=None):
     """
     If the model is set, it predicts the image using the model passed and shows the result.
     """
+
+    print('Tile sizes: ', tile_sizes)
+
     sequence.return_meta = True
     mse_per_image = {}
-    mse_all = {mag: {i: [] for i in range(3)} for mag in config.magnifications}
+    n_fluo_channels = 3
+
+    mse_all = {mag: {i: [] for i in range(n_fluo_channels)} for mag in config.magnifications}
 
     for idx, (x, y, meta) in enumerate(sequence):
         batch_element = 0
@@ -126,10 +153,10 @@ def test(sequence, model=None, save=False, tile_sizes=None):
             plot_layout = 240
 
             if tile_sizes is not None:
-                y_pred = predict_tiled(x, 3, tile_sizes)
+                y_pred = predict_tiled(x, n_fluo_channels, tile_sizes)
             else:
                 y_pred = model.predict(x)
-                for ch in range(3):
+                for ch in range(n_fluo_channels):
                     plt.imshow(y_pred[batch_element, ..., ch])
             
             y_pred_sample = y_pred[batch_element]
@@ -162,7 +189,7 @@ def test(sequence, model=None, save=False, tile_sizes=None):
                 print(out_filename_pattern)
                 
                 # Save visualization results
-                vis_subdir = os.path.join(config.output_dir, 'visual', magnification)
+                vis_subdir = os.path.join(config.output_dir, config.experiment_id, 'visual', magnification)
 
                 os.makedirs(os.path.join(vis_subdir), exist_ok=True)
 
@@ -186,18 +213,17 @@ def test(sequence, model=None, save=False, tile_sizes=None):
                 stat_key = '%s/%s/%s'
                 mse_per_image[stat_key % (magnification, im_id, 'all')] = mse
 
-                for ch_id in range(3):
+                for ch_id in range(n_fluo_channels):
                     diff_ch = (y_sample[..., ch_id]-y_pred_sample[..., ch_id])**2
                     mse_ch = np.sum(diff_ch)/np.size(diff_ch)
                     mse_per_image[stat_key % (magnification, im_id, str(ch_id))] = mse_ch
                     mse_all[magnification][ch_id].append(mse_ch)
 
                 # Save raw results
-
-                """
-                result_subdir = os.path.join(config.output_dir, 'results', magnification)
+                result_subdir = os.path.join(config.output_dir, config.experiment_id, 'results', magnification)
                 os.makedirs(os.path.join(config.output_dir, result_subdir), exist_ok=True)
 
+                """
                 for channel_id in range(3):
                     imageio.imwrite(os.path.join(result_subdir, out_filename_pattern % (channel_id+1, channel_id+1)), y_pred_sample[..., channel_id])
                 """
@@ -214,26 +240,17 @@ def test(sequence, model=None, save=False, tile_sizes=None):
         plt.subplot(plot_layout + 4, title='GT Fluorescent (blue)')
         plt.imshow(y_im[..., 2])
 
-        #plt.show()
+        plt.show()
         #plt.savefig('%d.png' % idx)
 
-        if save and False:
-            bright = (x_sample[..., 1]*255).astype(np.uint8)
-            fluo = (y_sample*255).astype(np.uint8)
-            
-            imageio.imwrite(os.path.join(config.output_dir, '%d_bright.tif' % idx, bright))
-            imageio.imwrite(os.path.join(config.output_dir, '%d_fluo.tif' % idx, fluo))
+    if model is not None and config.save:
+        final_result = {mag: {ch: mean(mse_all[mag][ch]) for ch in range(n_fluo_channels)} for mag in config.magnifications}
 
+        experiment_dir = os.path.join(config.output_dir, config.experiment_id)
 
-            imageio.volwrite('%s/pred-%d.tif' % (config.output_dir, idx), y_pred_sample)
-            imageio.volwrite('%s/true-%d.tif' % (config.output_dir, idx), y_im)
-            imageio.volwrite('%s/input-%d.tif' % (config.output_dir, idx), np.transpose(x_sample, (2, 0, 1)))
-
-    final_result = {mag: {ch: mean(mse_all[mag][ch]) for ch in range(3)} for mag in config.magnifications}
-
-    misc.put_json(os.path.join(config.output_dir, 'mse_per_image.json'), mse_per_image)
-    misc.put_json(os.path.join(config.output_dir, 'mse_final.json'), final_result)
-    misc.put_json(os.path.join(config.output_dir, 'mse_all.json'), mse_all)
+        misc.put_json(os.path.join(experiment_dir, 'mse_per_image.json'), mse_per_image)
+        misc.put_json(os.path.join(experiment_dir, 'mse_final.json'), final_result)
+        misc.put_json(os.path.join(experiment_dir, 'mse_all.json'), mse_all)
 
     sequence.return_meta = False
 
@@ -272,5 +289,6 @@ if __name__ == '__main__':
     if config.train == True:
         model = train((train_sequence, val_sequence), model)
     
-    test(val_sequence, model, save=True, tile_sizes=(512, 512))
+    test(val_sequence)
+    test(val_sequence, model, save=True, tile_sizes=config.predict_tile_size)
     #test(train_sequence)

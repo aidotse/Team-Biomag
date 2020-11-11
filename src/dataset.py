@@ -3,6 +3,7 @@ import math
 from random import Random
 from glob import glob
 from collections import defaultdict
+import pprint
 
 import numpy as np
 import imageio
@@ -99,6 +100,9 @@ class AZSequence(Sequence):
             if random_subsample is not None:
                 slice_ = slice_[random_subsample]
 
+            if config.resize_crop is not None:
+                slice_ = transform.resize(slice_, config.resize_crop, anti_aliasing=False, order=1) #order=1 -> bilinear
+
             if idx == 0:
                 xy_shape = (len(slice_paths),) + np.shape(slice_)
                 image = np.zeros(xy_shape, slice_.dtype)
@@ -143,8 +147,7 @@ class AZSequence(Sequence):
             random_subsample = self.get_random_crop((2154-config.splity, 2554), config.sample_crop[:2])
         """
 
-        random_subsample = self.get_random_crop((2154, 2554), config.sample_crop[:2])
-
+        random_subsample = self.get_random_crop(config.target_size, config.sample_crop[:2])
 
         if not self.random_subsample_input:
             random_subsample = None
@@ -156,9 +159,6 @@ class AZSequence(Sequence):
             rotate_angle = 0
         fliplr_tf = np.random.uniform() < config.fliplr_p
         flipud_tf = np.random.uniform() < config.flipud_p
-
-        import pprint
-        pp = pprint.PrettyPrinter(indent=4)
 
         for batch_elem in batch_x:
             mag_level = misc.magnification_level(batch_elem[0])
@@ -177,11 +177,25 @@ class AZSequence(Sequence):
 
         for batch_elem in batch_y:
             mag_level = misc.magnification_level(batch_elem[0])
-            image = self.read_stack(batch_elem, self.train, random_subsample)
+            
+            if config.include_nuclei_channel:
+                batch_elem_0 = batch_elem[0]
+                batch_elem_0 = os.path.basename(batch_elem_0)
+                nuclei_path_ = os.path.join(config.cp_nuclei_path, mag_level, batch_elem_0 + 'f')
+        
+                image = self.read_stack(batch_elem + [nuclei_path_], self.train, random_subsample)
+            else:
+                image = self.read_stack(batch_elem, self.train, random_subsample)
             image = np.transpose(image, (1, 2, 0))
 
+            if config.include_nuclei_channel:
+                image[..., 3] = (image[..., 3] > 0).astype(image.dtype)
+            
+
             # Normalize to [0. 1.]
-            for ch in range(len(batch_elem)):
+            #channels = len(batch_elem)
+            channels = 3
+            for ch in range(channels):
                 image[..., ch] = normalize(
                     image[..., ch], 
                     self.norm[mag_level]['low'][ch], 
@@ -227,8 +241,8 @@ def info(im_name):
 def get_dataset(data_dir, train_, sample_per_image=60, random_subsample_input=True, seed=None, resetseed=None, filter_fun=None):
     print('Magnifications to use: %s' % config.magnifications)
     image_paths_, label_paths_ = get_images_list(data_dir, config.magnifications)
-    print('Number of image files discovered:', len(image_paths_))
-    print('Number of label files discovered:', len(label_paths_))
+    print('Number of image files discovered (7/FoV):', len(image_paths_))
+    print('Number of label files discovered (3/FoV):', len(label_paths_))
 
     image_paths, label_paths = [], []
     def filter_(paths, filter_fun_):
@@ -245,8 +259,8 @@ def get_dataset(data_dir, train_, sample_per_image=60, random_subsample_input=Tr
         image_paths = filter_(image_paths_, filter_fun)
         label_paths = filter_(label_paths, filter_fun)
 
-    print('Number of selected files:', len(image_paths))
-    print('Number of selected labels:', len(label_paths))
+    print('Number of image files selected (7/FoV):', len(image_paths))
+    print('Number of label files selected (3/FoV):', len(label_paths))
 
     label_paths.sort()
     image_paths.sort()
@@ -286,11 +300,15 @@ def get_dataset(data_dir, train_, sample_per_image=60, random_subsample_input=Tr
 
     images, labels = defaultdict(list), defaultdict(list)
 
+    print('Dataset inputs: train=', train_)
     for image in image_paths:
+        print('Adding:\t', image)
         k = (get_im_id(image), get_res(image))
         images[k].append(image)
 
+    print('Dataset labels: train=', train_)
     for label in label_paths:
+        print('Adding:\t', label)
         k = get_im_id(label), get_res(label)
         labels[k].append(label)
 
