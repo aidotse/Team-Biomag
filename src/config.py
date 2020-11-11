@@ -12,6 +12,7 @@ epochs = 1
 
 # Will be set by the init script
 data_dir = None
+cropped_data_dir = None
 
 # Split the input images into two parts at y=(2154-512-1).
 # We sample the patches from y<1641 to the train and y>=1641 to the val.
@@ -56,6 +57,8 @@ limits_file = 'x-limits-%s.json'
 # weights' path for saving the U_CP network, and path to the output of CP pipeline. Set by init.
 n_features = 99
 u_cp_weights_path = None
+cp_weights_path = None
+u_weights_path = None
 feature_file_path = None
 
 initial_epoch = 0
