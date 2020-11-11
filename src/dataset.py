@@ -3,6 +3,7 @@ import math
 from random import Random
 from glob import glob
 from collections import defaultdict
+import pprint
 
 import numpy as np
 import imageio
@@ -251,6 +252,11 @@ def get_dataset(data_dir, train_, sample_per_image=60, random_subsample_input=Tr
     label_paths.sort()
     image_paths.sort()
 
+    print('Dataset: train=', train_)
+    pp = pprint.PrettyPrinter(indent=4)
+    pp.pprint(label_paths)
+
+
     '''
     Image format:   AssayPlate_Greiner_#655090_D04_T0001F006L01A04Z03C04.tif - Only the Z varies
     Label format:   AssayPlate_Greiner_#655090_D04_T0001F006L01A01Z01C01.tif - A and C varies between C01 and C03, Z= 01
@@ -287,6 +293,7 @@ def get_dataset(data_dir, train_, sample_per_image=60, random_subsample_input=Tr
     images, labels = defaultdict(list), defaultdict(list)
 
     for image in image_paths:
+        print('Adding:', image)
         k = (get_im_id(image), get_res(image))
         images[k].append(image)
 

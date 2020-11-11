@@ -33,7 +33,7 @@ def visualize(original, augmented):
 
 def get_network():
     unet_input = Input(shape=config.net_input_shape)
-    unet_out = sd.unet_block(3, n_filter_base=64)(unet_input)
+    unet_out = sd.unet_block(3, n_filter_base=64, n_conv_per_depth=3)(unet_input)
     fluo_channels = Conv2D(3, (1, 1), name='fluo_channels', activation='sigmoid')(unet_out)
     
     model = Model(unet_input, fluo_channels)
