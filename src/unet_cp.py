@@ -16,7 +16,7 @@ from generators import CPSequence, U_CPSequence
 
 
 class NormLayer(Layer):
-    def __init__(self, low, high, name=None, dtype=None, dynamic=False, **kwargs):
+    def __init__(self, low, high, trainable=False, name=None, dtype=None, dynamic=False, **kwargs):
         super().__init__(False, name, dtype, dynamic, **kwargs)
         self.low = tf.cast(low, tf.float32)
         self.high = tf.cast(high, tf.float32)
@@ -24,7 +24,7 @@ class NormLayer(Layer):
             self.low = tf.expand_dims(self.low, 0)
             self.high = tf.expand_dims(self.high, 0)
 
-    def call(self, inputs, **kwargs):
+    def call(self, inputs):
         return self.normalize(inputs, self.low, self.high)
 
     @staticmethod
@@ -34,10 +34,19 @@ class NormLayer(Layer):
         out = out / (high - low)
         out = tf.clip_by_value(out, 0., 1.)
         return out
+    
+    def get_config(self):
+        config = super().get_config().copy()
+        config.update({
+            "low": self.low.numpy().reshape(-1),
+            "high": self.high.numpy().reshape(-1),
+        })
+        return config
+
 
 
 class DenormLayer(Layer):
-    def __init__(self, low, high, norm_to_0_1=False, name=None, dtype=None, dynamic=False, **kwargs):
+    def __init__(self, low, high, norm_to_0_1=False, trainable=False, name=None, dtype=None, dynamic=False, **kwargs):
         super().__init__(False, name, dtype, dynamic, **kwargs)
         self.low = tf.cast(low, tf.float32)
         self.high = tf.cast(high, tf.float32)
@@ -49,6 +58,15 @@ class DenormLayer(Layer):
     def call(self, inputs, **kwargs):
         out = dataset.denormalize(inputs, self.low, self.high)
         return out / 65535 if self.norm_to_0_1 else out
+
+    def get_config(self):
+        config = super().get_config().copy()
+        config.update({
+            "low": self.low.numpy().reshape(-1),
+            "high": self.high.numpy().reshape(-1),
+            "norm_to_0_1": self.norm_to_0_1
+        })
+        return config
 
 
 def CP(input_shape, n_features):
@@ -332,4 +350,9 @@ if config.u_weights_path is not None:
         except ValueError:
             print(l.name + " not in model")
 model.summary(line_length=120)
-model.fit(train_sequence, epochs=8, validation_data=val_sequence, callbacks=cb)
+model.save_weights("test_save.h5")
+model = U_CP(config.net_input_shape, config.n_features, norm_bounds=(low, high), n_depth=3)
+
+model.compile("adam", "mse", "mae", loss_weights=[1/65535**2, 1.])
+model.load_weights("test_save.h5")
+model.fit(train_sequence, epochs=12, validation_data=val_sequence, callbacks=cb)
