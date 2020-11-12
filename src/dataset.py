@@ -28,6 +28,7 @@ def normalize(im, low, high, histo = True):
     """
     Thresholds the image then translates to the interval [0, 1]
     """
+    '''
     if histo:
         im[im > high] = high
         im[im < low] = low
@@ -36,7 +37,8 @@ def normalize(im, low, high, histo = True):
     else:
         im /= np.max(im)
 
-    return im
+    '''
+    return im /65535.0
 
 def denormalize(im, low, high):
     return im*(high-low)+low
