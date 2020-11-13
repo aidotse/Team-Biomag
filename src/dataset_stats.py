@@ -69,6 +69,8 @@ def simplify(only_measure=True):
         means = defaultdict(list)
         stds = defaultdict(list)
 
+        # Process each FOV on the particular magnification level
+
         print('Computing histo limit stats on the mag level: %s' % magnification)
         for idx, im_key in enumerate(ims.keys()):
             merged = []
@@ -101,14 +103,18 @@ def simplify(only_measure=True):
                 highs[ch_id].append(_b)
                 mins[ch_id].append(sort_ch[0])
                 maxs[ch_id].append(sort_ch[-1])
+
+                means[ch_id].append(np.mean(fluo_im))
+                stds[ch_id].append(np.std(fluo_im))
                 print('im (fluo): %s, %s low: %s high: %s min: %s max: %s' % (fluo_path, magnification, _a, _b, sort_ch[0], sort_ch[-1]))
 
-            fluo = np.stack(fluo_channels)
-            means['fluo'].append(np.mean(fluo))
-            stds['fluo'].append(np.std(fluo))
+            #fluo = np.stack(fluo_channels)
+            #means['fluo'].append(np.mean(fluo))
+            #stds['fluo'].append(np.std(fluo))
 
             # Process brightfields
             bright_slices = []
+            bright_ch_id = 3
             for bright_filename in ims[im_key][3:]:
                 n, _a, _b, pad = 0, 0, 0, 0
                 sort_ch = None
@@ -128,16 +134,22 @@ def simplify(only_measure=True):
 
                 _a, _b = sort_ch[pad], sort_ch[-pad]
 
-                ch_id = 3
-                lows[ch_id].append(_a)
-                highs[ch_id].append(_b)
-                mins[ch_id].append(sort_ch[0])
-                maxs[ch_id].append(sort_ch[-1])
+                lows[bright_ch_id].append(_a)
+                highs[bright_ch_id].append(_b)
+                mins[bright_ch_id].append(sort_ch[0])
+                maxs[bright_ch_id].append(sort_ch[-1])
                 print('im (bright): %s mag: %s low: %s high: %s min: %s max: %s' % (bright_path, magnification, _a, _b, sort_ch[0], sort_ch[-1]))
 
             bright = np.stack(bright_slices)
-            means['bright'].append(np.mean(bright))
-            stds['bright'].append(np.std(bright))
+            means[bright_ch_id].append(np.mean(bright))
+            stds[bright_ch_id].append(np.std(bright))
+
+            '''
+            if idx == 0:
+                break
+            '''
+
+        # End of the loop through the FOVs
 
         channels = list(range(4))
 
@@ -165,15 +177,15 @@ def simplify(only_measure=True):
         print('stds, means:', stds, means)
 
         stat = {
-            'std': {k: mean(stds[k]) for k in ['fluo', 'bright']}, 
-            'mean': {k: mean(means[k]) for k in ['fluo', 'bright']}
+            'std': [mean(stds[ch_id]) for ch_id in channels],
+            'mean': [mean(means[ch_id]) for ch_id in channels]
         }
 
         print('limits, minmax', limits, minmax)
         print('std mean', stat)
 
         misc.put_json(os.path.join(out_path, config.limits_file) % magnification, limits)
-        misc.put_json(os.path.join(out_path, 'x-stat-%s.json') % magnification, stat)
+        misc.put_json(os.path.join(out_path, config.stats_file) % magnification, stat)
 
         if only_measure == False:
             print('Exporting dataset')

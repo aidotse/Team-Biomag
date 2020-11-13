@@ -39,6 +39,29 @@ def standardize(rawim, mean, std):
 def unstandardize(stdim, mean, std):
     return (stdim*std)+mean
 
+def standardize_bright(a_bright, mean, std, inverse=False):
+    fun = standardize
+    if inverse is True:
+        fun = unstandardize
+    
+    bright = a_bright.copy()
+    for z in range(np.shape(bright)[-1]):
+        bright[..., z] = fun(bright[..., z], mean, std)
+
+    return bright
+
+
+def standardize_fluo(a_fluo, mean, std, inverse=False):
+    fun = standardize
+    if inverse is True:
+        fun = unstandardize
+
+    fluo = a_fluo.copy()
+    for ch in range(np.shape(fluo)[-1]):
+        fluo[..., ch] = fun(fluo[..., ch], mean[ch], std[ch])
+
+    return fluo
+
 def normalize(im, low, high, histo = True):
     """
     Thresholds the image then translates to the interval [0, 1]
@@ -178,26 +201,21 @@ class AZSequence(Sequence):
         fliplr_tf = np.random.uniform() < config.fliplr_p
         flipud_tf = np.random.uniform() < config.flipud_p
 
+        mag_level = misc.magnification_level(batch_x[0][0])
+        bright_stats = self.stats[mag_level]['mean'][-1], self.stats[mag_level]['std'][-1]
+        fluo_stats = self.stats[mag_level]['mean'][:3], self.stats[mag_level]['std'][:3]
+
         for batch_elem in batch_x:
-            mag_level = misc.magnification_level(batch_elem[0])
             image = self.read_stack(batch_elem, self.train, random_subsample)
             image = np.transpose(image, (1, 2, 0))
-            
-            '''
-            for z in range(len(batch_elem)):
-                image[..., z] = normalize(
-                    image[..., z], 
-                    self.norm[mag_level]['low'][3], 
-                    self.norm[mag_level]['high'][3])
-            '''
-            image = standardize(image, self.stats[mag_level]['mean']['bright'], self.stats[mag_level]['std']['bright'])
+
+            image = standardize_bright(image, *bright_stats)
+
             if config.augment and self.train:
                 image = self.augment(image, rotate_angle, fliplr_tf, flipud_tf)
             batch_x_images.append(image)
 
         for batch_elem in batch_y:
-            mag_level = misc.magnification_level(batch_elem[0])
-            
             if config.include_nuclei_channel:
                 batch_elem_0 = batch_elem[0]
                 batch_elem_0 = os.path.basename(batch_elem_0)
@@ -210,20 +228,8 @@ class AZSequence(Sequence):
 
             if config.include_nuclei_channel:
                 image[..., 3] = (image[..., 3] > 0).astype(image.dtype)
-            
 
-            '''
-            #channels = len(batch_elem)
-            channels = 3
-            for ch in range(channels):
-                image[..., ch] = normalize(
-                    image[..., ch], 
-                    self.norm[mag_level]['low'][ch], 
-                    self.norm[mag_level]['high'][ch]
-                )
-            '''
-
-            image = standardize(image, self.stats[mag_level]['mean']['fluo'], self.stats[mag_level]['std']['fluo'])
+            image = standardize_fluo(image, *fluo_stats)
 
             if config.augment and self.train:
                 image = self.augment(image, rotate_angle, fliplr_tf, flipud_tf)
