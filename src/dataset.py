@@ -191,7 +191,15 @@ class AZSequence(Sequence):
             random_subsample = self.get_random_crop((2154-config.splity, 2554), config.sample_crop[:2])
         """
 
-        random_subsample = self.get_random_crop(config.target_size, config.sample_crop[:2])
+        # determine image size for appropriate crop
+        batch_element = batch_x[0]
+        im_path = batch_element[0]
+        slice_ = imageio.imread(im_path).astype(np.float32)
+        shape = np.shape(slice_)
+        crop_target_size = min(config.target_size, shape)
+
+        # get crop coords
+        random_subsample = self.get_random_crop(crop_target_size, config.sample_crop[:2])
 
         if not self.random_subsample_input:
             random_subsample = None
