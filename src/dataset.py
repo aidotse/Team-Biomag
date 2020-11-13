@@ -195,7 +195,7 @@ class AZSequence(Sequence):
 
         rotate_tf = np.random.uniform() < config.rotate_p
         if rotate_tf and config.augment:
-            rotate_angle = self.rand_instance.choice([0, 180])
+            rotate_angle = self.rand_instance.choice([0, 180, 270])
         else:
             rotate_angle = 0
         fliplr_tf = np.random.uniform() < config.fliplr_p
