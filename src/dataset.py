@@ -229,6 +229,7 @@ class AZSequence(Sequence):
             if config.include_nuclei_channel:
                 image[..., 3] = (image[..., 3] > 0).astype(image.dtype)
 
+            image = standardize_fluo(image, *fluo_stats)
             
             if False:
                 import matplotlib.pyplot as plt
