@@ -58,6 +58,7 @@ save = True
 
 # The file to export the min and max values of images
 limits_file = 'x-limits-%s.json'
+stats_file = 'x-stat-%s.json'
 
 # weights' path for saving the U_CP network, and path to the output of CP pipeline. Set by init.
 n_features = 99
@@ -75,3 +76,6 @@ cp_nuclei_path = '.'
 
 # What size of crop should be used for tiling
 predict_tile_size = (512, 512)
+
+# Visualize results on GUI using matplotlib
+visualize = False

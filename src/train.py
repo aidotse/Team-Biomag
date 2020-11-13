@@ -32,9 +32,10 @@ def visualize(original, augmented):
 
 
 def get_network():
+
     unet_input = Input(shape=config.net_input_shape)
     unet_block_out, skip_layers, concat_layers = sd.unet_block(3, n_filter_base=64)(unet_input)
-    fluo_channels = Conv2D(3, (1, 1), name='fluo_channels', activation='sigmoid')(unet_block_out)
+    fluo_channels = Conv2D(3, (1, 1), name='fluo_channels', activation='relu')(unet_block_out)
 
     # We can add another branch to the output of the middle upsample layer and supervise the 
     # CP nuclei segmentation... The loss should be modified to use bce for the 4th channel.
@@ -133,15 +134,13 @@ def test(sequence, model=None, save=False, tile_sizes=None):
     If the model is set, it predicts the image using the model passed and shows the result.
     """
 
-    print('Tile sizes: ', tile_sizes)
-
     sequence.return_meta = True
     mse_per_image = {}
     n_fluo_channels = 3
 
     mse_all = {mag: {i: [] for i in range(n_fluo_channels)} for mag in config.magnifications}
 
-    for idx, (x, y, meta) in enumerate(sequence):
+    for x, y, meta in sequence:
         batch_element = 0
         plot_layout = 140
 
@@ -149,10 +148,14 @@ def test(sequence, model=None, save=False, tile_sizes=None):
         z_pos = np.shape(x_sample)[-1]//2
         x_im, y_im = x_sample[..., z_pos], y_sample
 
+        magnification = misc.magnification_level(meta[batch_element][0])
+        stat = dataset.load_stats()
+
         if model is not None:
             plot_layout = 240
 
             if tile_sizes is not None:
+                print('Tile sizes: ', tile_sizes)
                 y_pred = predict_tiled(x, n_fluo_channels, tile_sizes)
             else:
                 y_pred = model.predict(x)
@@ -161,17 +164,17 @@ def test(sequence, model=None, save=False, tile_sizes=None):
             
             y_pred_sample = y_pred[batch_element]
 
-            # plt.subplot(plot_layout + 6, title='Predicted fluorescent (red)')
-            # plt.imshow(y_pred_sample[..., 0])
-            #
-            # plt.subplot(plot_layout + 7, title='Predicted Fluorescent (green)')
-            # plt.imshow(y_pred_sample[..., 1])
-            #
-            # plt.subplot(plot_layout + 8, title='Predicted Fluorescent (blue)')
-            # plt.imshow(y_pred_sample[..., 2])
+            if config.visualize:
+                plt.subplot(plot_layout + 6, title='Predicted fluorescent (red)')
+                plt.imshow(y_pred_sample[..., 0])
+                
+                plt.subplot(plot_layout + 7, title='Predicted Fluorescent (green)')
+                plt.imshow(y_pred_sample[..., 1])
+                
+                plt.subplot(plot_layout + 8, title='Predicted Fluorescent (blue)')
+                plt.imshow(y_pred_sample[..., 2])
 
-            if save and not config.readonly:
-                magnification = misc.magnification_level(meta[batch_element][0])
+            if config.save and not config.readonly:
                 filename = os.path.basename(meta[batch_element][0])
                 print('Predicted filename: %s, mag: %s' % (filename, magnification))
                 # AssayPlate_Greiner_#655090_D04_T0001F012L01A04Z07C04.tif
@@ -227,23 +230,49 @@ def test(sequence, model=None, save=False, tile_sizes=None):
                 for channel_id in range(3):
                     imageio.imwrite(os.path.join(result_subdir, out_filename_pattern % (channel_id+1, channel_id+1)), y_pred_sample[..., channel_id])
                 """
+        # End of prediction code
 
-        plt.subplot(plot_layout + 1, title='Input Brightfield@Z=%d' % z_pos)
-        plt.imshow(x_im)
-        
-        plt.subplot(plot_layout + 2, title='GT Fluorescent (red)')
-        plt.imshow(y_im[..., 0])
-        
-        plt.subplot(plot_layout + 3, title='GT Fluorescent (green)')
-        plt.imshow(y_im[..., 1])
-        
-        plt.subplot(plot_layout + 4, title='GT Fluorescent (blue)')
-        plt.imshow(y_im[..., 2])
+        if config.visualize:
+            plt.subplot(plot_layout + 1, title='Input Brightfield@Z=%d' % z_pos)
+            plt.imshow(x_im)
 
-        plt.show()
-        #plt.savefig('%d.png' % idx)
+            plt.subplot(plot_layout + 2, title='GT Fluorescent (red)')
+            plt.imshow(y_im[..., 0])
+            
+            plt.subplot(plot_layout + 3, title='GT Fluorescent (green)')
+            plt.imshow(y_im[..., 1])
 
-    if model is not None and config.save:
+            plt.subplot(plot_layout + 4, title='GT Fluorescent (blue)')
+            plt.imshow(y_im[..., 2])
+
+            plt.show()
+            #plt.savefig('%d.png' % idx)
+
+            plt.subplot(141, title='Inp, unnorm')
+            bright_stat = stat[magnification]['mean'][-1], stat[magnification]['std'][-1]
+            fluo_stat = stat[magnification]['mean'][:3], stat[magnification]['std'][:3]
+            
+            n_x = dataset.standardize_bright(x_sample, *bright_stat, inverse=True)
+            plt.imshow(n_x[..., z_pos])
+
+            plt.subplot(142, title='Inp as it got')
+            plt.imshow(x_sample[..., z_pos])
+
+            plt.subplot(143, title='Fluo unnorm')
+            n_y = dataset.standardize_fluo(y_sample, *fluo_stat, inverse=True)
+            plt.imshow(n_y[..., 0])
+
+            plt.subplot(144, title='Fluo as it got')
+            plt.imshow(y_sample[..., 0])
+
+            #imageio.volwrite('y.tif', y_sample)
+            #imageio.volwrite('y_unnorm.tif', n_y)
+
+            plt.show()
+
+        # End of loop
+
+    if model is not None and config.save and not config.readonly:
         final_result = {mag: {ch: mean(mse_all[mag][ch]) for ch in range(n_fluo_channels)} for mag in config.magnifications}
 
         experiment_dir = os.path.join(config.output_dir, config.experiment_id)
@@ -253,6 +282,8 @@ def test(sequence, model=None, save=False, tile_sizes=None):
         misc.put_json(os.path.join(experiment_dir, 'mse_all.json'), mse_all)
 
     sequence.return_meta = False
+
+    # End of function
 
 if __name__ == '__main__':
     # Leave out wells for validation
@@ -284,11 +315,10 @@ if __name__ == '__main__':
         print('Loading weights:', config.init_weights)
         model.load_weights(config.init_weights)
 
-    #test(train_sequence)
+    test(val_sequence)
 
     if config.train == True:
         model = train((train_sequence, val_sequence), model)
     
-    test(val_sequence)
     test(val_sequence, model, save=True, tile_sizes=config.predict_tile_size)
     #test(train_sequence)
