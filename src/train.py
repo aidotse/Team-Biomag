@@ -141,6 +141,8 @@ def test(sequence, model=None, save=False, tile_sizes=None):
     mse_all = {mag: {i: [] for i in range(n_fluo_channels)} for mag in config.magnifications}
 
     for x, y, meta in sequence:
+        print()
+
         batch_element = 0
         plot_layout = 140
 
