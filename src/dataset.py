@@ -113,6 +113,8 @@ class AZSequence(Sequence):
 
     def get_random_crop(self, image_shape, crop_shape):
         randmax = image_shape-np.array(list(crop_shape))
+        if randmax[0] == 0:
+            return (slice(0,crop_shape[0],None), slice(0,crop_shape[1],None))
         topleft = np.array([self.rand_instance.randrange(r) for r in randmax])
         return tuple(slice(s, e) for (s, e) in zip(topleft, topleft+crop_shape))
 
