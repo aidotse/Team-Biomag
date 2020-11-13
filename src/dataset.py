@@ -126,10 +126,13 @@ class AZSequence(Sequence):
             if config.target_size is not None and np.shape(slice_) != config.target_size:
                 # Resize
                 #slice_ = transform.resize(slice_, config.target_size)
-                
-                # Crop from top-left
-                global_crop = tuple(slice(None, s) for s in config.target_size)
-                slice_ = slice_[global_crop]
+
+                # Check if img is bigger than the crop size:
+                im_shape = np.shape(slice_)
+                if im_shape[0] > config.target_size[0] and im_shape[1] > config.target_size[1]:
+                    # Crop from top-left
+                    global_crop = tuple(slice(None, s) for s in config.target_size)
+                    slice_ = slice_[global_crop]
 
             """
             if train_:
@@ -229,6 +232,10 @@ class AZSequence(Sequence):
             if config.include_nuclei_channel:
                 image[..., 3] = (image[..., 3] > 0).astype(image.dtype)
 
+            if config.augment and self.train:
+                image = self.augment(image, rotate_angle, fliplr_tf, flipud_tf)
+            batch_y_images.append(image)
+
 
             '''
             Test standardization and then invert...
@@ -252,9 +259,6 @@ class AZSequence(Sequence):
             
             plt.show()
 
-            if config.augment and self.train:
-                image = self.augment(image, rotate_angle, fliplr_tf, flipud_tf)
-            batch_y_images.append(image)
             '''
 
         if self.return_meta:
