@@ -24,6 +24,21 @@ def load_limits():
 
     return norm
 
+def load_stats():
+    print('Loading std/mean for the datasets...')
+
+    stats = {}
+    for magnification in config.magnifications:
+        stats[magnification] = misc.get_json('x-stat-%s.json' % magnification)
+
+    return stats
+
+def standardize(rawim, mean, std):
+    return (rawim-mean)/std
+
+def unstandardize(stdim, mean, std):
+    return (stdim*std)+mean
+
 def normalize(im, low, high, histo = True):
     """
     Thresholds the image then translates to the interval [0, 1]
@@ -38,7 +53,7 @@ def normalize(im, low, high, histo = True):
         im /= np.max(im)
 
     '''
-    return im /65535.0
+    return im
 
 def denormalize(im, low, high):
     return im*(high-low)+low
@@ -60,6 +75,7 @@ class AZSequence(Sequence):
         self.train = train_
         self.random_subsample_input = random_subsample_input
         self.norm = load_limits()
+        self.stats = load_stats()
         self.return_meta = False
 
     def __len__(self):
@@ -167,12 +183,14 @@ class AZSequence(Sequence):
             image = self.read_stack(batch_elem, self.train, random_subsample)
             image = np.transpose(image, (1, 2, 0))
             
-            # Normalize to [0. 1.]
+            '''
             for z in range(len(batch_elem)):
                 image[..., z] = normalize(
                     image[..., z], 
                     self.norm[mag_level]['low'][3], 
                     self.norm[mag_level]['high'][3])
+            '''
+            image = standardize(image, self.stats[mag_level]['mean']['bright'], self.stats[mag_level]['std']['bright'])
             if config.augment and self.train:
                 image = self.augment(image, rotate_angle, fliplr_tf, flipud_tf)
             batch_x_images.append(image)
@@ -194,7 +212,7 @@ class AZSequence(Sequence):
                 image[..., 3] = (image[..., 3] > 0).astype(image.dtype)
             
 
-            # Normalize to [0. 1.]
+            '''
             #channels = len(batch_elem)
             channels = 3
             for ch in range(channels):
@@ -203,10 +221,9 @@ class AZSequence(Sequence):
                     self.norm[mag_level]['low'][ch], 
                     self.norm[mag_level]['high'][ch]
                 )
-            
-            #plt.imshow(image[...])
-            #plt.show()
+            '''
 
+            image = standardize(image, self.stats[mag_level]['mean']['fluo'], self.stats[mag_level]['std']['fluo'])
 
             if config.augment and self.train:
                 image = self.augment(image, rotate_angle, fliplr_tf, flipud_tf)

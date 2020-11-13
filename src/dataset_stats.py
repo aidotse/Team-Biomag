@@ -7,7 +7,7 @@ import matplotlib.pyplot as plt
 import imageio
 import numpy as np
 import pprint
-from statistics import median_low, median_high
+from statistics import median_low, median_high, mean
 
 import config
 import init
@@ -66,12 +66,17 @@ def simplify(only_measure=True):
         mins = defaultdict(list)
         maxs = defaultdict(list)
 
+        means = defaultdict(list)
+        stds = defaultdict(list)
+
         print('Computing histo limit stats on the mag level: %s' % magnification)
         for idx, im_key in enumerate(ims.keys()):
             merged = []
             # Process fluos
 
             print('Fluo keys:', ims[im_key][:3])
+
+            fluo_channels = []
 
             for ch_id, fluo_filename in enumerate(ims[im_key][:3]):
                 n, _a, _b, pad = 0, 0, 0, 0
@@ -83,6 +88,8 @@ def simplify(only_measure=True):
 
                 fluo_path = os.path.join(data_folder, magnification, fluo_filename)
                 fluo_im = imageio.imread(fluo_path)
+
+                fluo_channels.append(fluo_im)
 
                 sort_ch = np.sort(np.reshape(fluo_im, (-1,)))
                 n = len(sort_ch)
@@ -96,7 +103,12 @@ def simplify(only_measure=True):
                 maxs[ch_id].append(sort_ch[-1])
                 print('im (fluo): %s, %s low: %s high: %s min: %s max: %s' % (fluo_path, magnification, _a, _b, sort_ch[0], sort_ch[-1]))
 
+            fluo = np.stack(fluo_channels)
+            means['fluo'].append(np.mean(fluo))
+            stds['fluo'].append(np.std(fluo))
+
             # Process brightfields
+            bright_slices = []
             for bright_filename in ims[im_key][3:]:
                 n, _a, _b, pad = 0, 0, 0, 0
                 sort_ch = None
@@ -107,6 +119,7 @@ def simplify(only_measure=True):
 
                 bright_path = os.path.join(data_folder, magnification, bright_filename)
                 bright_im = imageio.imread(bright_path)
+                bright_slices.append(bright_im)
 
                 sort_ch = np.sort(np.reshape(bright_im, (-1,)))
 
@@ -121,6 +134,10 @@ def simplify(only_measure=True):
                 mins[ch_id].append(sort_ch[0])
                 maxs[ch_id].append(sort_ch[-1])
                 print('im (bright): %s mag: %s low: %s high: %s min: %s max: %s' % (bright_path, magnification, _a, _b, sort_ch[0], sort_ch[-1]))
+
+            bright = np.stack(bright_slices)
+            means['bright'].append(np.mean(bright))
+            stds['bright'].append(np.std(bright))
 
         channels = list(range(4))
 
@@ -144,9 +161,19 @@ def simplify(only_measure=True):
             'min': [int(min(mins[ch_id])) for ch_id in channels], 
             'max': [int(max(maxs[ch_id])) for ch_id in channels]}
 
-        print(limits, minmax)
+
+        print('stds, means:', stds, means)
+
+        stat = {
+            'std': {k: mean(stds[k]) for k in ['fluo', 'bright']}, 
+            'mean': {k: mean(means[k]) for k in ['fluo', 'bright']}
+        }
+
+        print('limits, minmax', limits, minmax)
+        print('std mean', stat)
 
         misc.put_json(os.path.join(out_path, config.limits_file) % magnification, limits)
+        misc.put_json(os.path.join(out_path, 'x-stat-%s.json') % magnification, stat)
 
         if only_measure == False:
             print('Exporting dataset')
