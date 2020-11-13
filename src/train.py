@@ -148,6 +148,9 @@ def test(sequence, model=None, save=False, tile_sizes=None):
         z_pos = np.shape(x_sample)[-1]//2
         x_im, y_im = x_sample[..., z_pos], y_sample
 
+        magnification = misc.magnification_level(meta[batch_element][0])
+        stat = dataset.load_stats()
+
         if model is not None:
             plot_layout = 240
 
@@ -172,7 +175,6 @@ def test(sequence, model=None, save=False, tile_sizes=None):
                 plt.imshow(y_pred_sample[..., 2])
 
             if config.save and not config.readonly:
-                magnification = misc.magnification_level(meta[batch_element][0])
                 filename = os.path.basename(meta[batch_element][0])
                 print('Predicted filename: %s, mag: %s' % (filename, magnification))
                 # AssayPlate_Greiner_#655090_D04_T0001F012L01A04Z07C04.tif
@@ -245,7 +247,29 @@ def test(sequence, model=None, save=False, tile_sizes=None):
 
             plt.show()
             #plt.savefig('%d.png' % idx)
-        
+
+            plt.subplot(141, title='Inp, unnorm')
+            bright_stat = stat[magnification]['mean'][-1], stat[magnification]['std'][-1]
+            fluo_stat = stat[magnification]['mean'][:3], stat[magnification]['std'][:3]
+            
+            n_x = dataset.standardize_bright(x_sample, *bright_stat, inverse=True)
+            plt.imshow(n_x[..., z_pos])
+
+            plt.subplot(142, title='Inp as it got')
+            plt.imshow(x_sample[..., z_pos])
+
+            plt.subplot(143, title='Fluo unnorm')
+            n_y = dataset.standardize_fluo(y_sample, *fluo_stat, inverse=True)
+            plt.imshow(n_y[..., 0])
+
+            plt.subplot(144, title='Fluo as it got')
+            plt.imshow(y_sample[..., 0])
+
+            #imageio.volwrite('y.tif', y_sample)
+            #imageio.volwrite('y_unnorm.tif', n_y)
+
+            plt.show()
+
         # End of loop
 
     if model is not None and config.save and not config.readonly:
@@ -291,7 +315,7 @@ if __name__ == '__main__':
         print('Loading weights:', config.init_weights)
         model.load_weights(config.init_weights)
 
-    #test(val_sequence)
+    test(val_sequence)
 
     if config.train == True:
         model = train((train_sequence, val_sequence), model)

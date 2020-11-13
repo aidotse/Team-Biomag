@@ -229,11 +229,33 @@ class AZSequence(Sequence):
             if config.include_nuclei_channel:
                 image[..., 3] = (image[..., 3] > 0).astype(image.dtype)
 
+
+            '''
+            Test standardization and then invert...
+
+            import matplotlib.pyplot as plt
+            plt.subplot(131, title='Before')
+            plt.imshow(image[..., 1])
+
+            print('Min max before', np.min(image), np.max(image))
+
             image = standardize_fluo(image, *fluo_stats)
+            plt.subplot(132, title='After stdized')
+            plt.imshow(image[..., 1])
+
+            print('Min max after std', np.min(image), np.max(image))
+
+            plt.subplot(133, title='Std inverted')
+            inverted = standardize_fluo(image, *fluo_stats, inverse=True)
+            plt.imshow(inverted[..., 1])
+            print('Min max after std', np.min(inverted), np.max(inverted))
+            
+            plt.show()
 
             if config.augment and self.train:
                 image = self.augment(image, rotate_angle, fliplr_tf, flipud_tf)
             batch_y_images.append(image)
+            '''
 
         if self.return_meta:
             return np.array(batch_x_images), np.array(batch_y_images), batch_x
