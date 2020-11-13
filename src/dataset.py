@@ -125,11 +125,14 @@ class AZSequence(Sequence):
 
             if config.target_size is not None and np.shape(slice_) != config.target_size:
                 # Resize
-                #slice_ = transform.resize(slice_, config.target_size)
-                
-                # Crop from top-left
-                global_crop = tuple(slice(None, s) for s in config.target_size)
-                slice_ = slice_[global_crop]
+                # slice_ = transform.resize(slice_, config.target_size)
+
+                # Check if img is bigger than the crop size:
+                im_shape = np.shape(slice_)
+                if im_shape[0] > config.target_size[0] and im_shape[1] > config.target_size[1]:
+                    # Crop from top-left
+                    global_crop = tuple(slice(None, s) for s in config.target_size)
+                    slice_ = slice_[global_crop]
 
             """
             if train_:
