@@ -34,7 +34,6 @@ def main():
 
     opt = tf.keras.optimizers.SGD(learning_rate=1e-4)
     loss = 'mae'
-    metrics = [tf.keras.metrics.MeanAbsoluteError()]
     modelspath = 'models/resnet50v2_epoch_{epoch:03d}_valloss_{val_loss:.2f}.h5'
     logspath = "logs"
     # Set modelpath if continuing from earlier checkpoint
@@ -106,7 +105,7 @@ def main():
             model = tf.keras.models.Model(inputs=base.input, outputs=dense)
             model.compile(optimizer=opt,
                           loss=loss,
-                          metrics=metrics)
+                          metrics=[tf.keras.metrics.MeanAbsoluteError()])
 
     callbacks = []
     checkpoint = tf.keras.callbacks.ModelCheckpoint(modelspath,
