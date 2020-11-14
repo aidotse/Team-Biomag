@@ -48,7 +48,8 @@ def standardize_bright(a_bright, mean, std, inverse=False):
     for z in range(np.shape(bright)[-1]):
         bright[..., z] = fun(bright[..., z], mean, std)
 
-    return bright
+    b_ = a_bright.copy()
+    return b_/65535.0
 
 
 def standardize_fluo(a_fluo, mean, std, inverse=False):
@@ -60,7 +61,9 @@ def standardize_fluo(a_fluo, mean, std, inverse=False):
     for ch in range(np.shape(fluo)[-1]):
         fluo[..., ch] = fun(fluo[..., ch], mean[ch], std[ch])
 
-    return fluo
+    #return fluo
+    f_ = a_fluo.copy()
+    return f_ / 65535.0
 
 def normalize(im, low, high, histo = True):
     """

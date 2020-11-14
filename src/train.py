@@ -317,7 +317,7 @@ if __name__ == '__main__':
         print('Loading weights:', config.init_weights)
         model.load_weights(config.init_weights)
 
-    test(val_sequence)
+    #test(val_sequence)
 
     if config.train == True:
         model = train((train_sequence, val_sequence), model)
