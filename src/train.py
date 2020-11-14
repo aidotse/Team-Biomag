@@ -141,6 +141,8 @@ def test(sequence, model=None, save=False, tile_sizes=None):
     mse_all = {mag: {i: [] for i in range(n_fluo_channels)} for mag in config.magnifications}
 
     for x, y, meta in sequence:
+        print()
+
         batch_element = 0
         plot_layout = 140
 
@@ -315,7 +317,7 @@ if __name__ == '__main__':
         print('Loading weights:', config.init_weights)
         model.load_weights(config.init_weights)
 
-    test(val_sequence)
+    #test(val_sequence)
 
     if config.train == True:
         model = train((train_sequence, val_sequence), model)

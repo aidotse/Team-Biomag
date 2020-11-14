@@ -48,7 +48,8 @@ def standardize_bright(a_bright, mean, std, inverse=False):
     for z in range(np.shape(bright)[-1]):
         bright[..., z] = fun(bright[..., z], mean, std)
 
-    return bright
+    b_ = a_bright.copy()
+    return b_/65535.0
 
 
 def standardize_fluo(a_fluo, mean, std, inverse=False):
@@ -60,7 +61,9 @@ def standardize_fluo(a_fluo, mean, std, inverse=False):
     for ch in range(np.shape(fluo)[-1]):
         fluo[..., ch] = fun(fluo[..., ch], mean[ch], std[ch])
 
-    return fluo
+    #return fluo
+    f_ = a_fluo.copy()
+    return f_ / 65535.0
 
 def normalize(im, low, high, histo = True):
     """
@@ -113,6 +116,8 @@ class AZSequence(Sequence):
 
     def get_random_crop(self, image_shape, crop_shape):
         randmax = image_shape-np.array(list(crop_shape))
+        if randmax[0] == 0:
+            return (slice(0,crop_shape[0],None), slice(0,crop_shape[1],None))
         topleft = np.array([self.rand_instance.randrange(r) for r in randmax])
         return tuple(slice(s, e) for (s, e) in zip(topleft, topleft+crop_shape))
 
@@ -125,11 +130,14 @@ class AZSequence(Sequence):
 
             if config.target_size is not None and np.shape(slice_) != config.target_size:
                 # Resize
-                #slice_ = transform.resize(slice_, config.target_size)
-                
-                # Crop from top-left
-                global_crop = tuple(slice(None, s) for s in config.target_size)
-                slice_ = slice_[global_crop]
+                # slice_ = transform.resize(slice_, config.target_size)
+
+                # Check if img is bigger than the crop size:
+                im_shape = np.shape(slice_)
+                if im_shape[0] > config.target_size[0] and im_shape[1] > config.target_size[1]:
+                    # Crop from top-left
+                    global_crop = tuple(slice(None, s) for s in config.target_size)
+                    slice_ = slice_[global_crop]
 
             """
             if train_:
@@ -188,7 +196,15 @@ class AZSequence(Sequence):
             random_subsample = self.get_random_crop((2154-config.splity, 2554), config.sample_crop[:2])
         """
 
-        random_subsample = self.get_random_crop(config.target_size, config.sample_crop[:2])
+        # determine image size for appropriate crop
+        batch_element = batch_x[0]
+        im_path = batch_element[0]
+        slice_ = imageio.imread(im_path).astype(np.float32)
+        shape = np.shape(slice_)
+        crop_target_size = min(config.target_size, shape)
+
+        # get crop coords
+        random_subsample = self.get_random_crop(crop_target_size, config.sample_crop[:2])
 
         if not self.random_subsample_input:
             random_subsample = None
@@ -229,33 +245,31 @@ class AZSequence(Sequence):
             if config.include_nuclei_channel:
                 image[..., 3] = (image[..., 3] > 0).astype(image.dtype)
 
-
-            '''
-            Test standardization and then invert...
-
-            import matplotlib.pyplot as plt
-            plt.subplot(131, title='Before')
-            plt.imshow(image[..., 1])
-
-            print('Min max before', np.min(image), np.max(image))
-
             image = standardize_fluo(image, *fluo_stats)
-            plt.subplot(132, title='After stdized')
-            plt.imshow(image[..., 1])
 
-            print('Min max after std', np.min(image), np.max(image))
+            if False:
+                import matplotlib.pyplot as plt
+                plt.subplot(131, title='Before')
+                plt.imshow(image[..., 1])
 
-            plt.subplot(133, title='Std inverted')
-            inverted = standardize_fluo(image, *fluo_stats, inverse=True)
-            plt.imshow(inverted[..., 1])
-            print('Min max after std', np.min(inverted), np.max(inverted))
-            
-            plt.show()
+                print('Min max before', np.min(image), np.max(image))
+
+                image = standardize_fluo(image, *fluo_stats)
+                plt.subplot(132, title='After stdized')
+                plt.imshow(image[..., 1])
+
+                print('Min max after std', np.min(image), np.max(image))
+
+                plt.subplot(133, title='Std inverted')
+                inverted = standardize_fluo(image, *fluo_stats, inverse=True)
+                plt.imshow(inverted[..., 1])
+                print('Min max after std', np.min(inverted), np.max(inverted))
+
+                plt.show()
 
             if config.augment and self.train:
                 image = self.augment(image, rotate_angle, fliplr_tf, flipud_tf)
             batch_y_images.append(image)
-            '''
 
         if self.return_meta:
             return np.array(batch_x_images), np.array(batch_y_images), batch_x
