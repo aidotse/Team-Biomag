@@ -12,8 +12,8 @@ config.save = True
 config.data_dir = os.environ['AZ_DATA']
 config.augment = True
 
-config.resize_crop = (1077, 1277)
-config.upscale_result = (2054, 2554)
+config.resize_crop = (1078, 1278)
+config.upscale_result = (2156, 2556)
 
-config.init_weights = 'output/2020-1114_01-47-25/model-0355-0.00000642.h5'
-config.output_dir = 'output/2020-1114_01-47-25'
+config.init_weights = 'output/60x/unet_60x_trained_500x.h5'
+config.output_dir = 'output'
