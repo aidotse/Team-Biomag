@@ -1,6 +1,6 @@
 import os
 from statistics import mean
-
+import time
 import numpy as np
 import tensorflow as tf
 import imageio
@@ -325,6 +325,10 @@ if __name__ == '__main__':
 
     if config.train == True:
         model = train((train_sequence, val_sequence), model)
-    
+
+    start = time.time()
     test(val_sequence, model, save=True, tile_sizes=config.predict_tile_size)
+    end = time.time()
+    print("Execution of the script: {}".format(end - start))
+
     #test(train_sequence)
