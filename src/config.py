@@ -19,7 +19,7 @@ cropped_data_dir = None
 splity = 1641
 
 # If not none, crop the top-left part to uniform.
-target_size = (2154, 2554)
+target_size = None#(2154, 2554)
 
 # The input will be sampled with this size.
 sample_crop = (512, 512, 1)
