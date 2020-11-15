@@ -1,5 +1,17 @@
 # Biomag
 
+## How to run inference, quick guide
+Inference is ran using src/predict_all.sh script. The script includes input file path
+AZ_DATA
+which should be changed to the test data input directory. The script assumes that the input directory includes separately 20x, 40x and 60x subfolders for different magnifications.
+
+Config files for each magnification are located at
+src/experiments/prediction/(20x|40x|60x)/init.py
+
+The output path and the model path should be modified into each of those three files in config variables
+config.output_dir
+config.init_weights
+
 ## Setting up
 Python 3.7 is recommended.
 
