@@ -230,10 +230,11 @@ def test(sequence, model=None, save=False, tile_sizes=None):
                 os.makedirs(os.path.join(config.output_dir, result_subdir), exist_ok=True)
 
                 for channel_id in range(3):
-                    y_result =  y_pred_sample[..., channel_id]*65535.0
-                    y_result = y_result.astype(np.uint16)
+                    y_result =  y_pred_sample[..., channel_id]*65535.0 # TODO: call unnormalize here!
                     if config.upscale_result is not None:
                         y_result = transform.resize(y_result, config.upscale_result, anti_aliasing=False, order=1) #order=1 -> bilinear
+                    
+                    y_result = y_result.astype(np.uint16)
                     imageio.imwrite(os.path.join(config.output_dir, result_subdir, out_filename_pattern % (channel_id+1, channel_id+1)), y_result)
         # End of prediction code
 
@@ -295,12 +296,12 @@ if __name__ == '__main__':
     lo_ws = ['D04']
 
     train_sequence = dataset.get_dataset(
-        config.data_dir, 
-        train_=True, 
-        sample_per_image=config.train_samples_per_image, 
-        random_subsample_input=config.train_subsample, 
-        seed=config.seed, 
-        filter_fun=lambda im: dataset.info(im)[1] not in lo_ws)
+            config.data_dir,                                        # Data directory, it has 3 subdirs: 20x, 40x, 60. 
+        train_=True,                                                # If it will be used for training. (No augmentation for val)
+        sample_per_image=config.train_samples_per_image,            # How many random crops should be extracted per FOV
+        random_subsample_input=config.train_subsample,              # Do we want to extract crops / or want to train w/ the full images?
+        seed=config.seed,                                           # ...
+        filter_fun=lambda im: dataset.info(im)[1] not in lo_ws)     # Filter the data: the info() returns (experiment, well, field)
     
     val_sequence = dataset.get_dataset(
         config.data_dir, 
@@ -308,7 +309,7 @@ if __name__ == '__main__':
         sample_per_image=config.val_samples_per_image, 
         random_subsample_input=config.val_subsample, 
         seed=config.seed, 
-        resetseed=True,
+        resetseed=True,                                             # The seed is reset after every epoch so we work with the same validation set.
         filter_fun=lambda im: dataset.info(im)[1] in lo_ws)
 
     print('Length of the train sequence: %d' % len(train_sequence))
@@ -320,7 +321,7 @@ if __name__ == '__main__':
         print('Loading weights:', config.init_weights)
         model.load_weights(config.init_weights)
 
-    #test(val_sequence)
+    #test(val_sequence)                                             # If noting is passed but a sequence, then it shows each image (if the visualization turned on in the config.)
 
     if config.train == True:
         model = train((train_sequence, val_sequence), model)

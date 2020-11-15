@@ -201,7 +201,7 @@ class AZSequence(Sequence):
         im_path = batch_element[0]
         slice_ = imageio.imread(im_path).astype(np.float32)
         shape = np.shape(slice_)
-        crop_target_size = min(config.target_size, shape)
+        crop_target_size = min(config.target_size, shape) if config.target_size is not None else shape
 
         # get crop coords
         random_subsample = self.get_random_crop(crop_target_size, config.sample_crop[:2])
