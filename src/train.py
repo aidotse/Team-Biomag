@@ -8,6 +8,7 @@ import matplotlib.pyplot as plt
 from tensorflow.keras.layers import Input, Conv2D, BatchNormalization, Activation, Dropout, MaxPooling2D, UpSampling2D, Concatenate
 from tensorflow.keras.models import Model
 from tensorflow.keras.losses import MeanSquaredError
+from skimage import transform
 
 import config
 import init
@@ -225,13 +226,15 @@ def test(sequence, model=None, save=False, tile_sizes=None):
                     mse_all[magnification][ch_id].append(mse_ch)
 
                 # Save raw results
-                result_subdir = os.path.join(config.output_dir, config.experiment_id, 'results', magnification)
+                result_subdir = os.path.join(config.experiment_id, 'results', magnification)
                 os.makedirs(os.path.join(config.output_dir, result_subdir), exist_ok=True)
 
-                """
                 for channel_id in range(3):
-                    imageio.imwrite(os.path.join(result_subdir, out_filename_pattern % (channel_id+1, channel_id+1)), y_pred_sample[..., channel_id])
-                """
+                    y_result =  y_pred_sample[..., channel_id]*65535.0
+                    y_result = y_result.astype(np.uint16)
+                    if config.upscale_result is not None:
+                        y_result = transform.resize(y_result, config.upscale_result, anti_aliasing=False, order=1) #order=1 -> bilinear
+                    imageio.imwrite(os.path.join(config.output_dir, result_subdir, out_filename_pattern % (channel_id+1, channel_id+1)), y_result)
         # End of prediction code
 
         if config.visualize:

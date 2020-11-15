@@ -6,6 +6,7 @@ venv
 __pycache__
 
 init.py
+init.tpl.py
 *.h5
 output
 

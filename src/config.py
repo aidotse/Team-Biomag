@@ -79,3 +79,5 @@ predict_tile_size = (512, 512)
 
 # Visualize results on GUI using matplotlib
 visualize = False
+
+upscale_result = None
