@@ -84,13 +84,6 @@ $ git push
 ```
 
 ## Docker
-Build the image
-```
-docker build --tag biomag:adipocyte .
-```
-
-Run training:
-```
-./docker_run.sh /path/to/data
-```
+In the `Docker` folder, build the image using `sh build.sh`.
+Then the container can be started using `sh run.sh`. 
 
