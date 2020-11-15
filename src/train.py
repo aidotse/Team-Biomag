@@ -141,6 +141,7 @@ def test(sequence, model=None, save=False, tile_sizes=None):
 
     mse_all = {mag: {i: [] for i in range(n_fluo_channels)} for mag in config.magnifications}
 
+    timer = 0.0
     for x, y, meta in sequence:
         print()
 
@@ -157,6 +158,7 @@ def test(sequence, model=None, save=False, tile_sizes=None):
         if model is not None:
             plot_layout = 240
 
+            start = time.time()
             if tile_sizes is not None:
                 print('Tile sizes: ', tile_sizes)
                 y_pred = predict_tiled(x, n_fluo_channels, tile_sizes)
@@ -164,6 +166,8 @@ def test(sequence, model=None, save=False, tile_sizes=None):
                 y_pred = model.predict(x)
                 for ch in range(n_fluo_channels):
                     plt.imshow(y_pred[batch_element, ..., ch])
+            end = time.time()
+            timer = timer + end - start
             
             y_pred_sample = y_pred[batch_element]
 
@@ -288,7 +292,7 @@ def test(sequence, model=None, save=False, tile_sizes=None):
         misc.put_json(os.path.join(experiment_dir, 'mse_all.json'), mse_all)
 
     sequence.return_meta = False
-
+    print("Inference time: {} s".format(timer))
     # End of function
 
 if __name__ == '__main__':
@@ -326,9 +330,6 @@ if __name__ == '__main__':
     if config.train == True:
         model = train((train_sequence, val_sequence), model)
 
-    start = time.time()
     test(val_sequence, model, save=True, tile_sizes=config.predict_tile_size)
-    end = time.time()
-    print("Execution of the script: {}".format(end - start))
 
     #test(train_sequence)
