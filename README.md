@@ -12,6 +12,9 @@ The output path and the model path should be modified into each of those three f
 config.output_dir
 config.init_weights
 
+After the modifications, just run
+./predict_all.sh
+
 ## Setting up
 Python 3.7 is recommended.
 
